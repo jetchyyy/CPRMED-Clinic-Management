@@ -155,10 +155,13 @@ export function useCreateInvoice() {
       const existingInvoices = queryClient.getQueryData<Invoice[]>(queryKeys.invoices) ?? [];
       const invoiceNumber = generateInvoiceNumber(existingInvoices);
       
+      // Prefer explicit appointmentId from form, fall back to tagged booking's appointment
+      const appointmentId = values.appointmentId ?? taggedBooking?.appointmentId ?? null;
+      
       return createInvoiceLiveOrDemo(
         {
           patientId: values.patientId,
-          appointmentId: taggedBooking?.appointmentId ?? null,
+          appointmentId,
           invoiceNumber,
           paymentStatus: 'unpaid',
           subtotal: total,
@@ -190,11 +193,14 @@ export function useUpdateInvoice() {
       // Keep existing invoice number or generate new one
       const invoiceNumber = invoices.find((invoice) => invoice.id === invoiceId)?.invoiceNumber ?? generateInvoiceNumber(invoices);
       
+      // Prefer explicit appointmentId from form, fall back to tagged booking's appointment
+      const appointmentId = values.appointmentId ?? taggedBooking?.appointmentId ?? null;
+      
       return updateInvoiceLiveOrDemo(
         invoiceId,
         {
           patientId: values.patientId,
-          appointmentId: taggedBooking?.appointmentId ?? null,
+          appointmentId,
           invoiceNumber,
           paymentStatus: 'unpaid',
           subtotal: total,

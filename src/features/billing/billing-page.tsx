@@ -15,6 +15,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { isModuleEnabled } from '../../config/modules';
 import { useAuth } from '../auth/auth-context';
 import { useClinicSettingsData } from '../../hooks/use-clinic-data';
+import { useAppointments } from '../appointments/hooks/use-appointments';
 import { LabServiceReceiptCard } from '../laboratory/components/lab-service-receipt-card';
 import { formatCurrency } from '../../lib/utils';
 // import { labRequestService } from '../../lab-requests/api/lab-request-service';
@@ -84,6 +85,8 @@ export function BillingPage() {
   const { data: patients = [] } = usePatients();
 
   const { data: bookings = [] } = useBookings();
+
+  const { data: appointments = [] } = useAppointments();
 
   const { data: invoices = [] } = useInvoices();
 
@@ -239,6 +242,7 @@ export function BillingPage() {
     form.reset({
       patientId: patients[0]?.id ?? '',
       bookingId: '',
+      appointmentId: '',
       items: [
         {
           description: 'General Consultation',
@@ -272,6 +276,7 @@ export function BillingPage() {
     form.reset({
       patientId: invoice.patientId,
       bookingId: '',
+      appointmentId: invoice.appointmentId ?? '',
       items: items.map((item) => ({
         description: item.description,
         category: item.category,
@@ -803,6 +808,26 @@ export function BillingPage() {
                     </Select>
                   </FormField>
                   {selectedBooking ? <p className="text-xs text-slate-500">Tagged booking amount: {formatCurrency(selectedBooking.feeAmount)}</p> : null}
+                  
+                  <FormField label="Link to appointment (optional but recommended)">
+                    <Select {...form.register('appointmentId')}>
+                      <option value="">Select an appointment</option>
+                      {appointments
+                        .filter((appt) => appt.patientId === form.watch('patientId'))
+                        .filter((appt) => !['cancelled', 'completed', 'no_show'].includes(appt.status))
+                        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime())
+                        .map((appointment) => {
+                          const date = new Date(appointment.scheduledAt);
+                          const formatted = date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                          return (
+                            <option key={appointment.id} value={appointment.id}>
+                              {formatted} - {appointment.status}
+                            </option>
+                          );
+                        })}
+                    </Select>
+                  </FormField>
+                  <p className="text-xs text-slate-500">Linking to an appointment ensures payment verification is tied to the specific session, preventing old invoices from authorizing access.</p>
                 </div>
 
                 <div className="space-y-4 border-t border-slate-100 px-4 py-5 sm:px-6">
