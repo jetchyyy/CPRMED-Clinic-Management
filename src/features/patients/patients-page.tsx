@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ClipboardList, Pencil, QrCode, Search, Trash2, UserRoundPlus, Users, X } from 'lucide-react';
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
 import { FormField } from '../../components/forms/form-field';
@@ -32,6 +32,7 @@ const patientSchema = z.object({
   temperature: z.string().optional(),
   bloodPressure: z.string().optional(),
   heartRate: z.string().optional(),
+  o2Sat: z.string().optional(),
   respiratoryRate: z.string().optional(),
   weight: z.string().optional(),
   height: z.string().optional(),
@@ -62,6 +63,7 @@ const patientFieldLabels: Record<keyof PatientFormValues, string> = {
   temperature: 'Temperature (°C)',
   bloodPressure: 'Blood Pressure (mmHg)',
   heartRate: 'Heart Rate (bpm)',
+  o2Sat: 'O2sat (%)',
   respiratoryRate: 'Respiratory Rate (breaths/min)',
   weight: 'Weight (kg)',
   height: 'Height (cm)',
@@ -90,7 +92,7 @@ const walkInSteps = [
     id: 'vitals',
     title: 'Vitals',
     description: 'Record patient vital signs at time of intake.',
-    fields: ['temperature', 'bloodPressure', 'heartRate', 'respiratoryRate', 'weight', 'height'] as const,
+    fields: ['temperature', 'bloodPressure', 'heartRate', 'o2Sat', 'respiratoryRate', 'weight', 'height'] as const,
   },
   {
     id: 'emergency',
@@ -115,6 +117,8 @@ function getPatientVisitBadge(patient: Patient) {
 }
 
 export function PatientsPage() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: patients = [] } = usePatients();
   const { can, profile } = useAuth();
   const createPatient = useCreatePatient();
@@ -125,6 +129,7 @@ export function PatientsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [walkInStepIndex, setWalkInStepIndex] = useState(0);
+  const [walkInNextStep, setWalkInNextStep] = useState<'none' | 'appointment'>('none');
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [feedbackModal, setFeedbackModal] = useState<FeedbackModalState>({
     open: false,
@@ -151,6 +156,7 @@ export function PatientsPage() {
       temperature: '',
       bloodPressure: '',
       heartRate: '',
+      o2Sat: '',
       respiratoryRate: '',
       weight: '',
       height: '',
@@ -166,6 +172,26 @@ export function PatientsPage() {
       ),
     [deferredSearch, patients],
   );
+
+  useEffect(() => {
+    const action = (searchParams.get('action') ?? '').trim();
+    if (action !== 'walk-in-intake') {
+      return;
+    }
+
+    const next = (searchParams.get('next') ?? '').trim();
+    setWalkInNextStep(next === 'appointment' ? 'appointment' : 'none');
+    form.reset();
+    setEditingPatient(null);
+    setWalkInStepIndex(0);
+    setIsWalkInModalOpen(true);
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('action');
+    nextParams.delete('next');
+    setSearchParams(nextParams, { replace: true });
+  }, [form, searchParams, setSearchParams]);
+
   const totalPages = Math.max(1, Math.ceil(filteredPatients.length / PATIENTS_PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStart = (safeCurrentPage - 1) * PATIENTS_PAGE_SIZE;
@@ -196,6 +222,7 @@ export function PatientsPage() {
     form.reset();
     setEditingPatient(null);
     setWalkInStepIndex(0);
+    setWalkInNextStep('none');
     setIsWalkInModalOpen(true);
   };
 
@@ -216,6 +243,7 @@ export function PatientsPage() {
       temperature: patient.temperature ?? '',
       bloodPressure: patient.bloodPressure ?? '',
       heartRate: patient.heartRate ?? '',
+      o2Sat: patient.o2Sat ?? '',
       respiratoryRate: patient.respiratoryRate ?? '',
       weight: patient.weight ?? '',
       height: patient.height ?? '',
@@ -228,6 +256,7 @@ export function PatientsPage() {
   const closeWalkInModal = () => {
     setWalkInStepIndex(0);
     setEditingPatient(null);
+    setWalkInNextStep('none');
     setIsWalkInModalOpen(false);
   };
 
@@ -261,10 +290,11 @@ export function PatientsPage() {
             temperature: payload.temperature,
             bloodPressure: payload.bloodPressure,
             heartRate: payload.heartRate,
+            o2Sat: payload.o2Sat,
             respiratoryRate: payload.respiratoryRate,
             weight: payload.weight,
             height: payload.height,
-            vitalsRecordedAt: payload.temperature || payload.bloodPressure || payload.heartRate || payload.respiratoryRate || payload.weight || payload.height 
+            vitalsRecordedAt: payload.temperature || payload.bloodPressure || payload.heartRate || payload.o2Sat || payload.respiratoryRate || payload.weight || payload.height 
               ? new Date().toISOString() 
               : editingPatient.vitalsRecordedAt ?? null,
           },
@@ -294,11 +324,11 @@ export function PatientsPage() {
           variant: 'success',
         });
       } else {
-        const vitalsRecordedAt = values.temperature || values.bloodPressure || values.heartRate || values.respiratoryRate || values.weight || values.height 
+        const vitalsRecordedAt = values.temperature || values.bloodPressure || values.heartRate || values.o2Sat || values.respiratoryRate || values.weight || values.height 
           ? new Date().toISOString() 
           : null;
 
-        await createPatient.mutateAsync({
+        const createdPatient = await createPatient.mutateAsync({
           ...values,
           userId: null,
           qrCode: '',
@@ -312,11 +342,18 @@ export function PatientsPage() {
           message: 'The patient record was created successfully and is now available in the registry.',
           variant: 'success',
         });
+
+        if (walkInNextStep === 'appointment') {
+          navigate(
+            `/app/appointments?action=create&patientId=${createdPatient.id}&source=internal`,
+          );
+        }
       }
 
       form.reset();
       setWalkInStepIndex(0);
       setEditingPatient(null);
+      setWalkInNextStep('none');
       setIsWalkInModalOpen(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Something went wrong while creating the patient record.';
@@ -740,7 +777,10 @@ export function PatientsPage() {
                         <Input type="number" step="1" placeholder="e.g., 16" {...form.register('respiratoryRate')} />
                       </FormField>
                     </div>
-                    <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="grid gap-4 lg:grid-cols-3">
+                      <FormField error={form.formState.errors.o2Sat?.message} label="O2sat (%)">
+                        <Input type="number" step="1" placeholder="e.g., 98" {...form.register('o2Sat')} />
+                      </FormField>
                       <FormField error={form.formState.errors.weight?.message} label="Weight (kg)">
                         <Input type="number" step="0.1" placeholder="e.g., 70.5" {...form.register('weight')} />
                       </FormField>

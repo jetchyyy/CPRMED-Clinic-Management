@@ -1,5 +1,6 @@
 import type { Appointment, Booking, Invoice } from '../../../types/domain';
 import {
+  getPatientByIdLiveOrDemo,
   getLatestInvoiceByPatientIdLiveOrDemo,
   listAppointmentsByPatientIdLiveOrDemo,
   listBookingsByPatientIdLiveOrDemo,
@@ -10,6 +11,7 @@ import { appointmentService } from './appointment-service';
 export type ConsultationAccessFailureReason =
   | 'unpaid_balance'
   | 'no_invoice'
+  | 'missing_vitals'
   | 'query_error';
 
 export interface ConsultationAccessResult {
@@ -119,7 +121,14 @@ function getNextAppointmentStatus(
   return status;
 }
 
-async function syncAppointmentAfterPaidValidation(patientId: string) {
+async function resolveAppointmentForConsultation(patientId: string, invoiceAppointmentId: string | null) {
+  if (invoiceAppointmentId) {
+    const linkedAppointment = await appointmentService.getAppointmentById(invoiceAppointmentId);
+    if (linkedAppointment) {
+      return linkedAppointment;
+    }
+  }
+
   const [appointments, bookings] = await Promise.all([
     listAppointmentsByPatientIdLiveOrDemo(patientId),
     listBookingsByPatientIdLiveOrDemo(patientId),
@@ -129,34 +138,22 @@ async function syncAppointmentAfterPaidValidation(patientId: string) {
   if (linkedAppointmentId) {
     const linkedAppointment = appointments.find((appointment) => appointment.id === linkedAppointmentId)
       ?? (await appointmentService.getAppointmentById(linkedAppointmentId));
-
     if (linkedAppointment) {
-      const intakeNotes = getLatestIntakeNotes(bookings);
-      const nextNotes = composeAppointmentNotes(linkedAppointment.notes ?? '', intakeNotes);
-      const nextStatus = getNextAppointmentStatus(linkedAppointment.status);
-
-      await updateAppointmentStatusAndNotesLiveOrDemo({
-        appointmentId: linkedAppointment.id,
-        status: nextStatus,
-        notes: nextNotes,
-      });
-
-      return {
-        appointmentId: linkedAppointment.id,
-        intakeNotesApplied: Boolean(intakeNotes),
-        message: 'Payment validated. Appointment is ready for SOAP documentation.',
-      };
+      return linkedAppointment;
     }
   }
 
-  const appointment = getLatestOpenAppointment(appointments);
+  return getLatestOpenAppointment(appointments);
+}
+
+async function applyIntakeNotesAndConfirmAppointment(appointmentId: string, patientId: string) {
+  const [appointment, bookings] = await Promise.all([
+    appointmentService.getAppointmentById(appointmentId),
+    listBookingsByPatientIdLiveOrDemo(patientId),
+  ]);
+
   if (!appointment) {
-    return {
-      appointmentId: null,
-      intakeNotesApplied: false,
-      message:
-        'Payment validated, but no open appointment was found to mark as confirmed.',
-    };
+    throw new Error('Appointment not found while finalizing intake.');
   }
 
   const intakeNotes = getLatestIntakeNotes(bookings);
@@ -169,11 +166,7 @@ async function syncAppointmentAfterPaidValidation(patientId: string) {
     notes: nextNotes,
   });
 
-  return {
-    appointmentId: appointment.id,
-    intakeNotesApplied: Boolean(intakeNotes),
-    message: 'Payment validated. Appointment is ready for SOAP documentation.',
-  };
+  return { intakeNotesApplied: Boolean(intakeNotes) };
 }
 
 export async function validatePatientConsultationAccess(
@@ -183,12 +176,24 @@ export async function validatePatientConsultationAccess(
     // Get today's appointments to identify the current active appointment
     const appointments = await listAppointmentsByPatientIdLiveOrDemo(patientId);
     const currentAppointment = getTodaysSoonestAppointment(appointments);
-    
-    // Get the invoice for this specific appointment, or fall back to latest if no current appointment
-    // This prevents old paid invoices from masking new pending ones for returning patients
+
+    if (!currentAppointment) {
+      return {
+        allowed: false,
+        reason: 'no_invoice',
+        latestInvoice: null,
+        appointmentId: null,
+        intakeNotesApplied: false,
+        message:
+          "No appointment found for today's session. Please schedule or select an appointment before proceeding.",
+      };
+    }
+
+    // Get the invoice for this specific appointment only (no fallback).
+    // This prevents old paid invoices from masking new pending ones for returning patients.
     const latestInvoice = await getLatestInvoiceByPatientIdLiveOrDemo(
       patientId,
-      currentAppointment?.id,
+      currentAppointment.id,
     );
 
     if (!latestInvoice) {
@@ -199,7 +204,7 @@ export async function validatePatientConsultationAccess(
         appointmentId: null,
         intakeNotesApplied: false,
         message:
-          'Unpaid Balance. No invoice record exists for this patient yet.',
+          'No invoice generated for this session. A new invoice must be created and paid before consultation can proceed.',
       };
     }
 
@@ -210,19 +215,53 @@ export async function validatePatientConsultationAccess(
         latestInvoice,
         appointmentId: null,
         intakeNotesApplied: false,
-        message: `Unpaid Balance. Latest invoice ${latestInvoice.invoiceNumber} is ${latestInvoice.paymentStatus}.`,
+        message: `Payment Required for today's session. Invoice ${latestInvoice.invoiceNumber} is ${latestInvoice.paymentStatus}.`,
       };
     }
 
-    const syncResult = await syncAppointmentAfterPaidValidation(patientId);
+    const appointment = await resolveAppointmentForConsultation(
+      patientId,
+      latestInvoice.appointmentId ?? currentAppointment?.id ?? null,
+    );
+
+    if (!appointment) {
+      return {
+        allowed: false,
+        reason: 'no_invoice',
+        latestInvoice,
+        appointmentId: null,
+        intakeNotesApplied: false,
+        message:
+          'Payment is already marked paid, but no open appointment was found for this patient.',
+      };
+    }
+
+    const patient = await getPatientByIdLiveOrDemo(patientId);
+    const bloodPressure = patient?.bloodPressure?.trim() ?? '';
+    const weightValue = Number(patient?.weight ?? '');
+    const hasWeight = Number.isFinite(weightValue) && weightValue > 0;
+
+    if (!bloodPressure || !hasWeight) {
+      return {
+        allowed: false,
+        reason: 'missing_vitals',
+        latestInvoice,
+        appointmentId: appointment.id,
+        intakeNotesApplied: false,
+        message:
+          'Front Desk vitals are required before consultation. Please record blood pressure and weight in intake first.',
+      };
+    }
+
+    const syncResult = await applyIntakeNotesAndConfirmAppointment(appointment.id, patientId);
 
     return {
       allowed: true,
       reason: 'paid',
       latestInvoice,
-      appointmentId: syncResult.appointmentId,
+      appointmentId: appointment.id,
       intakeNotesApplied: syncResult.intakeNotesApplied,
-      message: syncResult.message,
+      message: 'Payment and front-desk vitals verified. Appointment confirmed for consultation.',
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to validate payment status.';

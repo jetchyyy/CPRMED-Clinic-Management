@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { updatePatientLiveOrDemo } from "../../lib/supabase-clinic";
 import { usePatientDetail } from "../patients/hooks/use-patients";
 
@@ -84,7 +85,7 @@ function isPastRescheduleTime(dateStr: string, timeStr: string) {
   return scheduled.getTime() < Date.now();
 }
 
-function feeTypeLabel(type: string) {
+function feeTypeLabel(type: string | null) {
   switch (type) {
     case "consultation":
       return "Consultation";
@@ -660,6 +661,12 @@ export function PatientBookingPageList() {
 
   const filtered = useMemo(() => {
     return bookings.filter((b) => {
+      const isCompletedAndPaid =
+        b.status === "completed" && b.paymentStatus === "paid";
+      if (isCompletedAndPaid) {
+        return false;
+      }
+
       const matchesStatus = statusFilter === "all" || b.status === statusFilter;
       const q = search.toLowerCase();
       const matchesSearch =
@@ -992,7 +999,7 @@ function BookingTableRow({
       {/* Actions */}
       <td className="px-4 py-3 align-top">
         <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
-          {booking.paymentStatus === "paid" && (
+          {booking.paymentStatus === "paid" && booking.status !== "completed" && (
             <button
               type="button"
               onClick={onRecordVitals}
@@ -1068,6 +1075,7 @@ function VitalsModal({ booking, onClose }: VitalsModalProps) {
     temperature: "",
     bloodPressure: "",
     heartRate: "",
+    o2Sat: "",
     respiratoryRate: "",
     weight: "",
     height: "",
@@ -1081,6 +1089,7 @@ function VitalsModal({ booking, onClose }: VitalsModalProps) {
         temperature: patient.temperature || "",
         bloodPressure: patient.bloodPressure || "",
         heartRate: patient.heartRate || "",
+        o2Sat: patient.o2Sat || "",
         respiratoryRate: patient.respiratoryRate || "",
         weight: patient.weight || "",
         height: patient.height || "",
@@ -1098,13 +1107,17 @@ function VitalsModal({ booking, onClose }: VitalsModalProps) {
         temperature: fields.temperature || undefined,
         bloodPressure: fields.bloodPressure || undefined,
         heartRate: fields.heartRate || undefined,
+        o2Sat: fields.o2Sat || undefined,
         respiratoryRate: fields.respiratoryRate || undefined,
         weight: fields.weight || undefined,
         height: fields.height || undefined,
         vitalsRecordedAt: new Date().toISOString(),
       });
     },
-    onSuccess: () => onClose(),
+    onSuccess: () => {
+      toast.success("Vitals saved successfully.");
+      onClose();
+    },
     onError: (err: Error) => setError(err.message),
   });
 
@@ -1164,6 +1177,13 @@ function VitalsModal({ booking, onClose }: VitalsModalProps) {
                   label: "Heart Rate (bpm)",
                   placeholder: "e.g., 72",
                   type: "number",
+                },
+                {
+                  key: "o2Sat",
+                  label: "O2sat (%)",
+                  placeholder: "e.g., 98",
+                  type: "number",
+                  step: "1",
                 },
                 {
                   key: "respiratoryRate",

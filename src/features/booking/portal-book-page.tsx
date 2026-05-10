@@ -405,6 +405,7 @@ export function PortalBookPage() {
           ? createdBooking.id
           : crypto.randomUUID(),
       patientId: currentPatient.id,
+      patientName: `${currentPatient.firstName} ${currentPatient.lastName}`,
       serviceId: values.serviceId,
       serviceName: selectedService?.name ?? "Booked medical service",
       doctorId: requiresDoctor ? (values.doctorId ?? null) : null,
@@ -482,7 +483,7 @@ export function PortalBookPage() {
                       medical_clearance: "Medical Clearance for Abroad",
                       aesthetic_services: "Procedures & Aesthetic Services",
                       vaccination: "Vaccination Services",
-                      consultation: "Specialist Consultation",
+                      consultation: "General Consultation",
                       follow_up: "Follow-up Visit", // Added this
                       medical_service: "Medical Service", // Added this
                     } as Record<string, string>

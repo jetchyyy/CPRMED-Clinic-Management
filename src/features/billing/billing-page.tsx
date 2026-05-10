@@ -14,6 +14,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { isModuleEnabled } from '../../config/modules';
 import { useAuth } from '../auth/auth-context';
 import { useClinicSettingsData } from '../../hooks/use-clinic-data';
+import { useAppointments } from '../appointments/hooks/use-appointments';
 import { LabServiceReceiptCard } from '../laboratory/components/lab-service-receipt-card';
 import { printHtmlDocument } from '../../lib/print';
 import { getDoctorDirectoryLiveOrDemo, listConsultationsByPatientIdLiveOrDemo } from '../../lib/supabase-clinic';
@@ -81,7 +82,7 @@ function formatDoctorSignatureName(
     .replace(/^,\s*/, '')
     .replace(/^dr\.?\s+/i, '');
 
-  return suffix ? `Dr. ${baseName}, ${suffix}` : `Dr. ${baseName}`;
+  return suffix ? `${baseName}, ${suffix}` : baseName;
 }
 
 async function resolveLatestDoctorAssignedName(patientId: string) {
@@ -162,6 +163,8 @@ export function BillingPage() {
   const { data: patients = [] } = usePatients();
 
   const { data: bookings = [] } = useBookings();
+
+  const { data: appointments = [] } = useAppointments();
 
   const { data: invoices = [] } = useInvoices();
 
@@ -328,6 +331,61 @@ export function BillingPage() {
   }, [invoices, searchParams, setSearchParams]);
 
   useEffect(() => {
+    const action = (searchParams.get('action') ?? '').trim();
+    if (action !== 'create') {
+      return;
+    }
+
+    const patientIdFromQuery = (searchParams.get('patientId') ?? '').trim();
+    const appointmentIdFromQuery = (searchParams.get('appointmentId') ?? '').trim();
+    const bookingIdFromQuery = (searchParams.get('bookingId') ?? '').trim();
+    const linkedBooking = bookings.find((booking) => booking.id === bookingIdFromQuery) ?? null;
+    const linkedAppointment = appointments.find((appointment) => appointment.id === appointmentIdFromQuery) ?? null;
+
+    const resolvedPatientId =
+      patientIdFromQuery ||
+      linkedAppointment?.patientId ||
+      linkedBooking?.patientId ||
+      '';
+    const resolvedAppointmentId =
+      appointmentIdFromQuery ||
+      linkedBooking?.appointmentId ||
+      '';
+    const resolvedBookingId = bookingIdFromQuery || '';
+    const resolvedPatient = patients.find((patient) => patient.id === resolvedPatientId) ?? null;
+
+    form.reset({
+      patientId: resolvedPatientId,
+      bookingId: resolvedBookingId,
+      appointmentId: resolvedAppointmentId,
+      paymentStatus: 'unpaid',
+      paymentType: 'cash',
+      referenceNumber: '',
+      items: [
+        {
+          description: 'General Consultation',
+          category: 'consultation',
+          quantity: 1,
+          unitPrice: 800,
+        },
+      ],
+    });
+    setInvoicePatientSearch(
+      resolvedPatient ? `${resolvedPatient.firstName} ${resolvedPatient.lastName}` : '',
+    );
+    setIsInvoicePatientDropdownOpen(false);
+    setEditingInvoiceId(null);
+    setIsInvoiceModalOpen(true);
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('action');
+    nextParams.delete('patientId');
+    nextParams.delete('appointmentId');
+    nextParams.delete('bookingId');
+    setSearchParams(nextParams, { replace: true });
+  }, [appointments, bookings, form, patients, searchParams, setSearchParams]);
+
+  useEffect(() => {
     if (payServiceForm.getValues('patientId') || patients.length === 0) {
       return;
     }
@@ -396,6 +454,7 @@ export function BillingPage() {
     form.reset({
       patientId: '',
       bookingId: '',
+      appointmentId: '',
       paymentStatus: 'unpaid',
       paymentType: 'cash',
       referenceNumber: '',
@@ -434,6 +493,7 @@ export function BillingPage() {
     form.reset({
       patientId: invoice.patientId,
       bookingId: '',
+      appointmentId: invoice.appointmentId ?? '',
       paymentStatus: invoice.paymentStatus === 'paid' ? 'paid' : 'unpaid',
       paymentType: 'cash',
       referenceNumber: '',
@@ -1020,6 +1080,26 @@ export function BillingPage() {
                     </Select>
                   </FormField>
                   {selectedBooking ? <p className="text-xs text-slate-500">Tagged booking amount: {formatCurrency(selectedBooking.feeAmount)}</p> : null}
+                  
+                  <FormField label="Link to appointment (optional but recommended)">
+                    <Select {...form.register('appointmentId')}>
+                      <option value="">Select an appointment</option>
+                      {appointments
+                        .filter((appt) => appt.patientId === form.watch('patientId'))
+                        .filter((appt) => !['cancelled', 'completed', 'no_show'].includes(appt.status))
+                        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime())
+                        .map((appointment) => {
+                          const date = new Date(appointment.scheduledAt);
+                          const formatted = date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                          return (
+                            <option key={appointment.id} value={appointment.id}>
+                              {formatted} - {appointment.status}
+                            </option>
+                          );
+                        })}
+                    </Select>
+                  </FormField>
+                  <p className="text-xs text-slate-500">Linking to an appointment ensures payment verification is tied to the specific session, preventing old invoices from authorizing access.</p>
                 </div>
 
                 <div className="space-y-4 border-t border-slate-100 px-4 py-5 sm:px-6">

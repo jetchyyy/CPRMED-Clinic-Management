@@ -26,7 +26,6 @@ import { Textarea } from "../../components/ui/textarea";
 import { useProviderDirectory } from "../../hooks/use-clinic-data";
 import { formatDateLabel, formatDateTimeLabel } from "../../lib/utils";
 import { getHomePathForRole } from "../../lib/role-routing";
-import type { Booking } from "../../types/domain";
 import { useAuth } from "../auth/auth-context";
 import { useCreateReferral } from "../referrals/hooks/use-referrals";
 import { validatePatientConsultationAccess } from "./services/consultation-access-service";
@@ -113,6 +112,7 @@ function buildPatientVitalsSnapshot(
         temperature?: string;
         bloodPressure?: string;
         heartRate?: string;
+        o2Sat?: string;
         respiratoryRate?: string;
         weight?: string;
         height?: string;
@@ -134,6 +134,9 @@ function buildPatientVitalsSnapshot(
   }
   if (patient.heartRate) {
     lines.push(`Heart Rate: ${patient.heartRate} bpm`);
+  }
+  if (patient.o2Sat) {
+    lines.push(`O2sat: ${patient.o2Sat} %`);
   }
   if (patient.respiratoryRate) {
     lines.push(`Respiratory Rate: ${patient.respiratoryRate} breaths/min`);
@@ -885,6 +888,7 @@ export function ConsultationEntryPage() {
       {(patient?.temperature ||
         patient?.bloodPressure ||
         patient?.heartRate ||
+        patient?.o2Sat ||
         patient?.respiratoryRate ||
         patient?.weight ||
         patient?.height) && (
@@ -926,6 +930,14 @@ export function ConsultationEntryPage() {
                   </p>
                   <p className="mt-1 text-lg font-semibold text-slate-900">
                     {patient.heartRate} bpm
+                  </p>
+                </div>
+              )}
+              {patient.o2Sat && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-medium text-slate-600">O2sat</p>
+                  <p className="mt-1 text-lg font-semibold text-slate-900">
+                    {patient.o2Sat} %
                   </p>
                 </div>
               )}
@@ -1020,22 +1032,6 @@ export function ConsultationEntryPage() {
                   appointment.
                 </p>
               </FormField>
-
-              {activeConsultationBookings.length > 0 && (
-                <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
-                  <p className="text-sm font-medium text-sky-900">
-                    Active booking requests
-                  </p>
-                  <ul className="mt-2 space-y-1">
-                    {activeConsultationBookings.map((booking: Booking) => (
-                      <li key={booking.id} className="text-xs text-sky-700">
-                        {booking.preferredDate} at {booking.preferredTime} —{" "}
-                        {booking.intakeNotes || "General consultation"}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
 
               <FormField
                 label={`${stepFields.consultationType.label} *`}
