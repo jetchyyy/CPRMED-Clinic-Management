@@ -1,7 +1,5 @@
 export function openQueuePrint({
   queueNumber,
-  scheduledAt,
-  estimatedEnd,
   patientName,
 }: {
   queueNumber: string;
@@ -9,9 +7,6 @@ export function openQueuePrint({
   estimatedEnd: string;
   patientName?: string;
 }) {
-  const scheduled = new Date(scheduledAt);
-  const end = new Date(estimatedEnd);
-
   const doc = `
   <html>
     <head>

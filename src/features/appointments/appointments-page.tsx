@@ -13,6 +13,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { Link, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
+import { cn } from "../../lib/utils";
 import { FormField } from "../../components/forms/form-field";
 import { Button } from "../../components/ui/button";
 import { FeedbackModal } from "../../components/ui/feedback-modal";

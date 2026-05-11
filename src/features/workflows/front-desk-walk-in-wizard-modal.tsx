@@ -120,9 +120,11 @@ function getDefaultWalkInScheduledAtValue() {
 export function WalkInWizardModal({
   open,
   onClose,
+  initialStage = "patient",
 }: {
   open: boolean;
   onClose: () => void;
+  initialStage?: WalkInWizardStage;
 }) {
   const { profile } = useAuth();
   const { data: appointments = [] } = useAppointments();
@@ -137,8 +139,6 @@ export function WalkInWizardModal({
   const createInvoice = useCreateInvoice();
   const updateAppointment = useUpdateAppointment();
   const [stage, setStage] = useState<WalkInWizardStage>(initialStage);
-  const [selectedTimeSession, setSelectedTimeSession] =
-    useState<TimeSession | null>(null);
   const [existingPatientSearch, setExistingPatientSearch] = useState("");
   const [isExistingPatientDropdownOpen, setIsExistingPatientDropdownOpen] =
     useState(false);
@@ -819,8 +819,6 @@ export function WalkInWizardModal({
                 </div>
               );
             })}
-          </div>
-
           </div>
         </div>
 
