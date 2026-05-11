@@ -31,7 +31,7 @@ function SoundWave({ active }: { active: boolean }) {
                   animation: `waveBar 0.7s ease-in-out ${i * 0.07}s infinite alternate`,
                   transformOrigin: "bottom",
                 }
-              : { height: 2, background: "rgba(255,255,255,0.12)" }
+              : { height: 2, background: "rgba(0,0,0,0.12)" }
           }
         />
       ))}
@@ -181,13 +181,17 @@ export function AppointmentsQueueTv() {
           from { transform: scaleY(0.35); opacity: 0.6; }
           to   { transform: scaleY(1.7);  opacity: 1;   }
         }
+        @keyframes waveBar {
+          from { transform: scaleY(0.35); opacity: 0.5; }
+          to   { transform: scaleY(1.7);  opacity: 1;   }
+        }
         @keyframes fadeSlideUp {
           from { opacity: 0; transform: translateY(24px); }
           to   { opacity: 1; transform: translateY(0);    }
         }
         @keyframes subtlePulse {
-          0%, 100% { opacity: 0.06; }
-          50%       { opacity: 0.13; }
+          0%, 100% { opacity: 0.04; }
+          50%       { opacity: 0.09; }
         }
         .queue-number-enter {
           animation: fadeSlideUp 0.5s cubic-bezier(0.22,1,0.36,1) both;
@@ -198,28 +202,28 @@ export function AppointmentsQueueTv() {
       {!audioUnlocked && (
         <div
           className="fixed inset-0 z-50 flex cursor-pointer flex-col items-center justify-center gap-8"
-          style={{ background: "#050d18" }}
+          style={{ background: "#f7f8fa" }}
           onClick={handleUnlockAudio}
         >
           <img
             src="/logo.png"
             alt={clinic.clinicName}
-            className="h-20 w-auto object-contain brightness-0 invert opacity-70"
+            className="h-20 w-auto object-contain opacity-80"
           />
           <div className="flex h-28 w-28 items-center justify-center rounded-full"
-            style={{ background: "rgba(125,212,83,0.1)", border: "1px solid rgba(125,212,83,0.25)" }}>
+            style={{ background: "rgba(125,212,83,0.1)", border: "1px solid rgba(125,212,83,0.3)" }}>
             <Volume2 className="h-12 w-12 text-[var(--color-primary)]" />
           </div>
           <div className="text-center">
-            <p className="text-3xl font-bold tracking-tight text-white">
+            <p className="text-3xl font-bold tracking-tight text-slate-900">
               Tap anywhere to start
             </p>
-            <p className="mt-2 text-base text-slate-500">
+            <p className="mt-2 text-base text-slate-400">
               Enables audio announcements for the queue display
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-full px-5 py-2.5"
-            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+            style={{ background: "rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.08)" }}>
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-primary)] opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-primary)]" />
@@ -233,28 +237,28 @@ export function AppointmentsQueueTv() {
 
       {/* ── TV Shell ─────────────────────────────────────────── */}
       <div
-        className="flex h-screen flex-col overflow-hidden font-sans text-white"
-        style={{ background: "#050d18" }}
+        className="flex h-screen flex-col overflow-hidden font-sans text-slate-900"
+        style={{ background: "#f7f8fa" }}
       >
         {/* ── Header ───────────────────────────────────────────── */}
         <header
           className="flex shrink-0 items-center justify-between px-8 py-4"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}
+          style={{ borderBottom: "1px solid rgba(0,0,0,0.07)", background: "rgba(0,0,0,0.015)" }}
         >
           {/* Brand */}
           <div className="flex items-center gap-4">
             <img
               src="/logo.png"
               alt={clinic.clinicName}
-              className="h-11 w-auto object-contain brightness-0 invert opacity-90"
+              className="h-11 w-auto object-contain opacity-90"
             />
-            <div className="h-8 w-px" style={{ background: "rgba(255,255,255,0.1)" }} />
+            <div className="h-8 w-px" style={{ background: "rgba(0,0,0,0.12)" }} />
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.3em]"
                 style={{ color: "var(--color-primary)" }}>
                 Patient Queue
               </p>
-              <p className="text-sm font-bold text-slate-300">{clinic.clinicName}</p>
+              <p className="text-sm font-bold text-slate-600">{clinic.clinicName}</p>
             </div>
           </div>
 
@@ -277,12 +281,12 @@ export function AppointmentsQueueTv() {
               )}
             </div>
             <div className="text-right">
-              <p className="font-mono text-xl font-bold tabular-nums text-white">
+              <p className="font-mono text-xl font-bold tabular-nums text-slate-900">
                 {currentTime.toLocaleTimeString("en-PH", {
                   hour: "2-digit", minute: "2-digit", second: "2-digit",
                 })}
               </p>
-              <p className="text-[11px] text-slate-600">
+              <p className="text-[11px] text-slate-400">
                 {currentTime.toLocaleDateString("en-PH", {
                   weekday: "short", month: "long", day: "numeric", year: "numeric",
                 })}
@@ -296,7 +300,7 @@ export function AppointmentsQueueTv() {
 
           {/* Left: Now Serving */}
           <div className="relative flex flex-col items-center justify-center overflow-hidden px-12 py-10"
-            style={{ borderRight: "1px solid rgba(255,255,255,0.06)" }}>
+            style={{ borderRight: "1px solid rgba(0,0,0,0.07)" }}>
 
             {/* Ambient glow — pulses when speaking */}
             <div
@@ -308,9 +312,23 @@ export function AppointmentsQueueTv() {
                 animation: isSpeaking ? "subtlePulse 2s ease-in-out infinite" : "none",
               }}
             />
-
+            {/* Centered watermark logo */}
+            <img
+              src="/logo.png"
+              alt=""
+              aria-hidden="true"
+              className="pointer-events-none absolute select-none"
+              style={{
+                width: "clamp(180px, 28vw, 360px)",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                opacity: 0.05,
+                objectFit: "contain",
+              }}
+            />
             {/* NOW SERVING label */}
-            <p className="mb-6 text-[11px] font-bold uppercase tracking-[0.5em] text-slate-600">
+            <p className="mb-6 text-[11px] font-bold uppercase tracking-[0.5em] text-slate-400">
               Now Serving
             </p>
 
@@ -323,14 +341,14 @@ export function AppointmentsQueueTv() {
                       <span className="absolute rounded-full"
                         style={{
                           inset: "-20%",
-                          border: "1px solid rgba(125,212,83,0.18)",
+                          border: "1px solid rgba(125,212,83,0.30)",
                           animation: "soundBar 1.5s ease-in-out infinite alternate",
                         }}
                       />
                       <span className="absolute rounded-full"
                         style={{
                           inset: "-36%",
-                          border: "1px solid rgba(125,212,83,0.08)",
+                          border: "1px solid rgba(125,212,83,0.18)",
                           animation: "soundBar 2s ease-in-out 0.4s infinite alternate",
                         }}
                       />
@@ -341,10 +359,10 @@ export function AppointmentsQueueTv() {
                     className="queue-number-enter relative font-mono font-bold leading-none tracking-tight"
                     style={{
                       fontSize: "clamp(4.5rem, 13vw, 9.5rem)",
-                      color: "#ffffff",
+                      color: "#0f172a",
                       textShadow: isSpeaking
-                        ? "0 0 60px rgba(125,212,83,0.3), 0 0 120px rgba(125,212,83,0.12)"
-                        : "0 4px 32px rgba(0,0,0,0.5)",
+                        ? "0 0 60px rgba(125,212,83,0.4), 0 0 120px rgba(125,212,83,0.18)"
+                        : "0 2px 12px rgba(0,0,0,0.06)",
                       transition: "text-shadow 0.6s ease",
                     }}
                   >
@@ -358,22 +376,22 @@ export function AppointmentsQueueTv() {
                   style={{
                     background: isSpeaking
                       ? "rgba(125,212,83,0.09)"
-                      : "rgba(255,255,255,0.04)",
+                      : "rgba(0,0,0,0.04)",
                     border: isSpeaking
-                      ? "1px solid rgba(125,212,83,0.25)"
-                      : "1px solid rgba(255,255,255,0.07)",
+                      ? "1px solid rgba(125,212,83,0.32)"
+                      : "1px solid rgba(0,0,0,0.08)",
                     transition: "background 0.5s ease, border-color 0.5s ease",
                   }}
                 >
                   <Volume2
                     className="h-5 w-5 shrink-0"
                     style={{
-                      color: isSpeaking ? "var(--color-primary)" : "rgba(148,163,184,0.5)",
+                      color: isSpeaking ? "var(--color-primary)" : "rgba(100,116,139,0.6)",
                       transition: "color 0.4s ease",
                     }}
                   />
                   <SoundWave active={isSpeaking} />
-                  <div className="mx-1 h-5 w-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+                  <div className="mx-1 h-5 w-px" style={{ background: "rgba(0,0,0,0.1)" }} />
                   <p
                     className="text-base font-semibold tracking-wide"
                     style={{
@@ -388,14 +406,14 @@ export function AppointmentsQueueTv() {
                 {/* Previous queue */}
                 {previousQueue && (
                   <div className="mt-5 flex items-center gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-700">
+                    <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
                       Previous:
                     </span>
-                    <span className="font-mono text-sm font-bold text-slate-600">
+                    <span className="font-mono text-sm font-bold text-slate-500">
                       {previousQueue.queue_number}
                     </span>
                     <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                      style={{ background: "rgba(255,255,255,0.05)", color: "rgb(100,116,139)" }}>
+                      style={{ background: "rgba(0,0,0,0.05)", color: "rgb(100,116,139)" }}>
                       Done
                     </span>
                   </div>
@@ -403,8 +421,8 @@ export function AppointmentsQueueTv() {
               </>
             ) : (
               <div className="text-center">
-                <p className="font-mono text-8xl font-bold" style={{ color: "rgba(30,41,59,1)" }}>—</p>
-                <p className="mt-5 text-lg text-slate-600">No active queue at this time</p>
+                <p className="font-mono text-8xl font-bold" style={{ color: "rgba(203,213,225,1)" }}>—</p>
+                <p className="mt-5 text-lg text-slate-400">No active queue at this time</p>
               </div>
             )}
           </div>
@@ -414,7 +432,7 @@ export function AppointmentsQueueTv() {
 
             {/* Up Next */}
             <div className="flex-1 overflow-y-auto px-5 pt-6 pb-4">
-              <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600">
+              <p className="mb-4 text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">
                 Up Next
               </p>
               {upcomingQueues.length > 0 ? (
@@ -424,18 +442,18 @@ export function AppointmentsQueueTv() {
                       key={q.id}
                       className="flex items-center gap-3 rounded-xl px-4 py-3"
                       style={{
-                        background: i === 0 ? "rgba(125,212,83,0.07)" : "rgba(255,255,255,0.03)",
+                        background: i === 0 ? "rgba(125,212,83,0.09)" : "rgba(0,0,0,0.03)",
                         border: i === 0
-                          ? "1px solid rgba(125,212,83,0.18)"
-                          : "1px solid rgba(255,255,255,0.05)",
+                          ? "1px solid rgba(125,212,83,0.25)"
+                          : "1px solid rgba(0,0,0,0.07)",
                       }}
                     >
-                      <span className="w-5 text-center text-xs font-bold tabular-nums text-slate-700">
+                      <span className="w-5 text-center text-xs font-bold tabular-nums text-slate-400">
                         {i + 1}
                       </span>
                       <span
                         className="font-mono text-base font-bold tabular-nums"
-                        style={{ color: i === 0 ? "rgba(255,255,255,0.9)" : "rgb(71,85,105)" }}
+                        style={{ color: i === 0 ? "rgb(15,23,42)" : "rgb(100,116,139)" }}
                       >
                         {q.queue_number}
                       </span>
@@ -451,29 +469,29 @@ export function AppointmentsQueueTv() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-700">No more in queue</p>
+                <p className="text-sm text-slate-400">No more in queue</p>
               )}
             </div>
 
             {/* Divider */}
-            <div className="mx-5" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }} />
+            <div className="mx-5" style={{ borderTop: "1px solid rgba(0,0,0,0.07)" }} />
 
             {/* Stats */}
             <div className="px-5 py-5">
-              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400">
                 Today's Progress
               </p>
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <div className="rounded-xl p-3 text-center"
-                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Served</p>
+                  style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.07)" }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Served</p>
                   <p className="mt-0.5 font-mono text-2xl font-bold" style={{ color: "var(--color-primary)" }}>
                     {completedCount}
                   </p>
                 </div>
                 <div className="rounded-xl p-3 text-center"
-                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">Waiting</p>
+                  style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.07)" }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Waiting</p>
                   <p className="mt-0.5 font-mono text-2xl font-bold" style={{ color: "var(--color-accent)" }}>
                     {remainingCount}
                   </p>
@@ -482,12 +500,12 @@ export function AppointmentsQueueTv() {
 
               {/* Progress bar */}
               <div>
-                <div className="mb-1.5 flex justify-between text-[10px] font-semibold text-slate-600">
+                <div className="mb-1.5 flex justify-between text-[10px] font-semibold text-slate-400">
                   <span>Progress</span>
                   <span>{completedCount} / {totalCount}</span>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full"
-                  style={{ background: "rgba(255,255,255,0.06)" }}>
+                  style={{ background: "rgba(0,0,0,0.08)" }}>
                   <div
                     className="h-full rounded-full transition-all duration-700"
                     style={{
@@ -503,15 +521,15 @@ export function AppointmentsQueueTv() {
             {/* Footer brand */}
             <div
               className="flex items-center justify-center gap-2 px-5 py-3"
-              style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
+              style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}
             >
               <img
                 src="/logo.png"
                 alt=""
                 aria-hidden="true"
-                className="h-5 w-auto object-contain brightness-0 invert opacity-20"
+                className="h-5 w-auto object-contain opacity-20"
               />
-              <span className="text-[10px] font-semibold text-slate-800">
+              <span className="text-[10px] font-semibold text-slate-400">
                 {clinic.clinicName}
               </span>
             </div>
