@@ -11,7 +11,6 @@ import {
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { Link, useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
 import { z } from "zod";
 
 import { FormField } from "../../components/forms/form-field";
@@ -30,22 +29,21 @@ import {
 } from "../../hooks/use-clinic-data";
 import {
   buildDailyTimeSlots,
-  formatTimeLabel,
   getAvailableTimeSlotsForDate,
   timeToMinutes,
 } from "../../lib/doctor-availability";
 import {
-  cn,
   formatDateTimeLabel,
   getPhilippineDateKey,
   getPhilippineTimeKey,
   toPhilippineDateTimeLocalValue,
   toUtcIsoFromPhilippineDateTime,
 } from "../../lib/utils";
+import { openQueuePrint } from "./components/appointments-que";
 import type { Appointment } from "../../types/domain";
+import { supabase, isSupabaseConfigured } from "../../lib/supabase";
 import { usePatients } from "../patients/hooks/use-patients";
 import { isTeleconsultJoinableStatus } from "../teleconsult/teleconsult-data";
-import { useBlockedBookingSlots } from "../booking/hooks/use-bookings";
 import {
   useAppointments,
   useCreateAppointment,
@@ -85,27 +83,6 @@ interface FeedbackModalState {
   title: string;
   message: string;
   variant: "success" | "error";
-}
-
-type TimeSession = "morning" | "afternoon" | "evening";
-
-function getTimeSession(time: string): TimeSession {
-  const hour = Number(time.split(":")[0]);
-
-  if (hour < 12) return "morning";
-  if (hour < 17) return "afternoon";
-  return "evening";
-}
-
-function getTimeSessionLabel(session: TimeSession) {
-  if (session === "morning") return "Morning";
-  if (session === "afternoon") return "Afternoon";
-  return "Evening";
-}
-
-function normalizeBlockedSlotTime(value: unknown) {
-  if (typeof value !== "string") return "";
-  return value.slice(0, 5);
 }
 
 function getDefaultScheduledAtValue() {
@@ -158,8 +135,7 @@ export function AppointmentsPage() {
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
   const [editingAppointment, setEditingAppointment] =
     useState<Appointment | null>(null);
-  const [selectedTimeSession, setSelectedTimeSession] =
-    useState<TimeSession | null>(null);
+
   const [feedbackModal, setFeedbackModal] = useState<FeedbackModalState>({
     open: false,
     title: "",
@@ -187,7 +163,10 @@ export function AppointmentsPage() {
   });
 
   const visitType = useWatch({ control: form.control, name: "visitType" });
-  const scheduledAtValue = useWatch({ control: form.control, name: "scheduledAt" });
+  const scheduledAtValue = useWatch({
+    control: form.control,
+    name: "scheduledAt",
+  });
   const selectedDoctorId = useWatch({
     control: form.control,
     name: "doctorId",
@@ -210,22 +189,17 @@ export function AppointmentsPage() {
   const { data: doctorAvailability = [] } = useDoctorAvailability(
     selectedDoctorId || null,
   );
-  const { data: blockedSlots = [] } = useBlockedBookingSlots({
-    date: selectedScheduleDate || null,
-    doctorId: selectedDoctorId || null,
-    serviceId: selectedServiceId || null,
-  });
-  const normalizedBlockedSlots = useMemo(
-    () => blockedSlots.map(normalizeBlockedSlotTime),
-    [blockedSlots],
-  );
+  // Note: removed blocked slot checks — queueing will handle conflicts
   const allTimeSlots = useMemo(() => {
     if (!selectedScheduleDate || !selectedDoctorId) {
       return [];
     }
 
     if (doctorAvailability.length > 0) {
-      return getAvailableTimeSlotsForDate(doctorAvailability, selectedScheduleDate);
+      return getAvailableTimeSlotsForDate(
+        doctorAvailability,
+        selectedScheduleDate,
+      );
     }
 
     return buildDailyTimeSlots(clinicSettings?.appointmentSlotMinutes || 30);
@@ -240,11 +214,7 @@ export function AppointmentsPage() {
       return [];
     }
 
-    const slots = allTimeSlots.filter(
-      (time) =>
-        !normalizedBlockedSlots.includes(time) ||
-        (isEditingCurrentScheduledAt && time === selectedScheduleTime),
-    );
+    const slots = allTimeSlots;
 
     if (selectedScheduleDate !== todayDateKey) {
       return slots;
@@ -261,15 +231,11 @@ export function AppointmentsPage() {
     allTimeSlots,
     currentTimeMinutes,
     isEditingCurrentScheduledAt,
-    normalizedBlockedSlots,
     selectedScheduleDate,
     selectedScheduleTime,
     todayDateKey,
   ]);
-  const selectedTimeIsBlocked =
-    Boolean(selectedScheduleTime) &&
-    normalizedBlockedSlots.includes(selectedScheduleTime) &&
-    !isEditingCurrentScheduledAt;
+
   const selectedDateIsPast =
     Boolean(selectedScheduleDate) &&
     selectedScheduleDate < todayDateKey &&
@@ -279,53 +245,6 @@ export function AppointmentsPage() {
     selectedScheduleDate === todayDateKey &&
     timeToMinutes(selectedScheduleTime) <= currentTimeMinutes &&
     !isEditingCurrentScheduledAt;
-  const timeSessionOptions = useMemo(() => {
-    const sessionOrder: TimeSession[] = ["morning", "afternoon", "evening"];
-
-    return sessionOrder.filter((sessionValue) =>
-      allTimeSlots.some((time) => getTimeSession(time) === sessionValue),
-    );
-  }, [allTimeSlots]);
-  const unavailableTimeSessions = useMemo(() => {
-    const sessionOrder: TimeSession[] = ["morning", "afternoon", "evening"];
-
-    return sessionOrder.filter(
-      (sessionValue) => !timeSessionOptions.includes(sessionValue),
-    );
-  }, [timeSessionOptions]);
-  const displayedTimeSlots = useMemo(() => {
-    if (!selectedTimeSession) {
-      return [];
-    }
-
-    return allTimeSlots
-      .filter((time) => getTimeSession(time) === selectedTimeSession)
-      .map((time) => {
-        const isPast =
-          selectedScheduleDate === todayDateKey &&
-          timeToMinutes(time) <= currentTimeMinutes;
-        const isBooked =
-          (normalizedBlockedSlots.includes(time) &&
-            !(isEditingCurrentScheduledAt && time === selectedScheduleTime)) ||
-          (isPast && !(isEditingCurrentScheduledAt && time === selectedScheduleTime));
-
-        return {
-          time,
-          isBooked,
-          isAvailable: !isBooked,
-          isPast,
-        };
-      });
-  }, [
-    allTimeSlots,
-    currentTimeMinutes,
-    isEditingCurrentScheduledAt,
-    normalizedBlockedSlots,
-    selectedScheduleDate,
-    selectedScheduleTime,
-    selectedTimeSession,
-    todayDateKey,
-  ]);
 
   const patientMap = useMemo(
     () => new Map(patients.map((patient) => [patient.id, patient])),
@@ -412,31 +331,6 @@ export function AppointmentsPage() {
   }, [doctors, form, selectedDoctorId, selectedServiceId, services]);
 
   useEffect(() => {
-    if (timeSessionOptions.length === 0) {
-      setSelectedTimeSession(null);
-      return;
-    }
-
-    if (
-      selectedTimeSession &&
-      timeSessionOptions.includes(selectedTimeSession)
-    ) {
-      return;
-    }
-
-    const currentSession = selectedScheduleTime
-      ? getTimeSession(selectedScheduleTime)
-      : null;
-
-    if (currentSession && timeSessionOptions.includes(currentSession)) {
-      setSelectedTimeSession(currentSession);
-      return;
-    }
-
-    setSelectedTimeSession(timeSessionOptions[0]);
-  }, [selectedScheduleTime, selectedTimeSession, timeSessionOptions]);
-
-  useEffect(() => {
     if (!selectedScheduleDate) {
       return;
     }
@@ -456,11 +350,15 @@ export function AppointmentsPage() {
       return;
     }
 
-    form.setValue("scheduledAt", `${selectedScheduleDate}T${availableTimeSlots[0]}`, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
+    form.setValue(
+      "scheduledAt",
+      `${selectedScheduleDate}T${availableTimeSlots[0]}`,
+      {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      },
+    );
   }, [
     availableTimeSlots,
     form,
@@ -512,7 +410,6 @@ export function AppointmentsPage() {
       teleconsultationUrl: "",
       teleconsultationAccessInstructions: "",
     });
-    setSelectedTimeSession(getTimeSession(defaultScheduledAt.slice(11, 16)));
     setEditingAppointment(null);
     setIsAppointmentModalOpen(true);
   };
@@ -559,7 +456,6 @@ export function AppointmentsPage() {
       teleconsultationAccessInstructions:
         appointment.teleconsultationAccessInstructions ?? "",
     });
-    setSelectedTimeSession(getTimeSession(scheduledAt.slice(11, 16)));
     setEditingAppointment(appointment);
     setIsAppointmentModalOpen(true);
   };
@@ -577,41 +473,16 @@ export function AppointmentsPage() {
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
-    if (!values.scheduledAt) {
-      toast.error("Please choose an available schedule date and time.");
-      return;
-    }
+    const scheduledAtUtc = editingAppointment
+      ? toUtcIsoFromPhilippineDateTime(values.scheduledAt)
+      : new Date().toISOString();
 
-    if (selectedDateIsPast) {
-      toast.error("Please select today or a future date for this appointment.");
-      return;
-    }
-
-    if (selectedTimeIsBlocked) {
-      toast.error(
-        "The selected time is no longer available. Please choose another slot.",
-      );
-      return;
-    }
-
-    if (selectedTimeIsPast) {
-      toast.error(
-        "The selected time is already in the past. Please choose a later slot.",
-      );
-      return;
-    }
-
-    if (availableTimeSlots.length === 0 && !isEditingCurrentScheduledAt) {
-      toast.error("No available slots for the selected doctor and date.");
-      return;
-    }
-
-    const payload = {
+    const basePayload = {
       patientId: values.patientId,
       doctorId: values.doctorId,
       specialtyId: values.specialtyId ?? "",
       serviceId: values.serviceId,
-      scheduledAt: toUtcIsoFromPhilippineDateTime(values.scheduledAt),
+      scheduledAt: scheduledAtUtc,
       status: values.status,
       source: values.source,
       visitType: values.visitType,
@@ -635,7 +506,7 @@ export function AppointmentsPage() {
       if (editingAppointment) {
         await updateAppointmentMutation.mutateAsync({
           appointmentId: editingAppointment.id,
-          payload,
+          payload: basePayload,
         });
         setFeedbackModal({
           open: true,
@@ -644,12 +515,82 @@ export function AppointmentsPage() {
           variant: "success",
         });
       } else {
-        await createAppointmentMutation.mutateAsync(payload);
+        let queueNumber = "ODC-QUE-000001";
+        try {
+          if (isSupabaseConfigured && supabase) {
+            const { data, error } = await supabase
+              .from("appointments")
+              .select("queue_number")
+              .not("queue_number", "is", null);
+            const latest = (data ?? []) as Array<{
+              queue_number: string | null;
+            }>;
+            if (!error && latest && latest.length > 0) {
+              const highestQueue = latest.reduce((max, row) => {
+                const m = String(row.queue_number ?? "").match(/(\d+)$/);
+                const value = m ? Number(m[1]) : 0;
+                return Math.max(max, Number.isFinite(value) ? value : 0);
+              }, 0);
+              const next = highestQueue + 1;
+              queueNumber = `ODC-QUE-${String(next).padStart(6, "0")}`;
+            }
+          } else {
+            const stored = Number(localStorage.getItem("odc_queue_seq") || "0");
+            const next = stored + 1;
+            localStorage.setItem("odc_queue_seq", String(next));
+            queueNumber = `ODC-QUE-${String(next).padStart(6, "0")}`;
+          }
+        } catch (err) {
+          const stored = Number(localStorage.getItem("odc_queue_seq") || "0");
+          const next = stored + 1;
+          localStorage.setItem("odc_queue_seq", String(next));
+          queueNumber = `ODC-QUE-${String(next).padStart(6, "0")}`;
+        }
+        const scheduledDate = new Date(scheduledAtUtc);
+
+        const minutes = scheduledDate.getMinutes();
+
+        let estimatedEndDate = new Date(scheduledDate);
+
+        // if less than 15 mins -> set to :30
+        if (minutes < 15) {
+          estimatedEndDate.setMinutes(30, 0, 0);
+        }
+        // if greater than or equal to 30 -> next hour :00
+        else if (minutes >= 30) {
+          estimatedEndDate.setHours(estimatedEndDate.getHours() + 1);
+          estimatedEndDate.setMinutes(0, 0, 0);
+        }
+        // between 15 and 29 -> also :30
+        else {
+          estimatedEndDate.setMinutes(30, 0, 0);
+        }
+
+        const estimatedEnd = estimatedEndDate.toISOString();
+
+        const created = await createAppointmentMutation.mutateAsync({
+          ...basePayload,
+          queue_number: queueNumber,
+          estimated_end: estimatedEnd,
+        });
+
         setFeedbackModal({
           open: true,
           title: "Appointment created",
           message: "The new appointment has been added to the schedule.",
           variant: "success",
+        });
+
+        const patient = patientMap.get(values.patientId);
+        const patientName = patient
+          ? `${patient.firstName} ${patient.lastName}`
+          : "Patient";
+
+        openQueuePrint({
+          queueNumber,
+          scheduledAt: created?.scheduledAt ?? scheduledAtUtc,
+          estimatedEnd,
+          patientName,
         });
       }
 
@@ -1056,155 +997,7 @@ export function AppointmentsPage() {
                       </Select>
                     </FormField>
                   </div>
-                  <FormField
-                    error={form.formState.errors.scheduledAt?.message}
-                    label="Schedule date"
-                    hint="Pick a date, then choose from the doctor's available time slots below."
-                  >
-                    <Input
-                      min={todayDateKey}
-                      type="date"
-                      value={selectedScheduleDate}
-                      onChange={(event) => {
-                        const nextDate = event.target.value;
-                        const currentTime =
-                          form.getValues("scheduledAt")?.slice(11, 16) ||
-                          availableTimeSlots[0] ||
-                          getPhilippineTimeKey().slice(0, 5);
-
-                        form.setValue(
-                          "scheduledAt",
-                          nextDate ? `${nextDate}T${currentTime}` : "",
-                          {
-                            shouldDirty: true,
-                            shouldTouch: true,
-                            shouldValidate: true,
-                          },
-                        );
-                      }}
-                    />
-                  </FormField>
-
-                  <FormField
-                    label="Time of day"
-                    hint={
-                      selectedScheduleDate
-                        ? "Only sessions with doctor availability are shown."
-                        : "Select a date first to load available sessions."
-                    }
-                  >
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      {timeSessionOptions.length > 0 ? (
-                        timeSessionOptions.map((sessionValue) => {
-                          const isActive = selectedTimeSession === sessionValue;
-
-                          return (
-                            <button
-                              key={sessionValue}
-                              className={cn(
-                                "rounded-sm border px-3 py-3 text-sm font-semibold transition",
-                                isActive
-                                  ? "border-orange-300 bg-orange-50 text-orange-700"
-                                  : "border-slate-200 bg-white text-slate-700 hover:border-orange-200 hover:bg-orange-50/40",
-                              )}
-                              onClick={() => setSelectedTimeSession(sessionValue)}
-                              type="button"
-                            >
-                              {getTimeSessionLabel(sessionValue)}
-                            </button>
-                          );
-                        })
-                      ) : (
-                        <div className="rounded-sm border border-dashed border-slate-200 px-3 py-3 text-sm text-slate-400 sm:col-span-3">
-                          {selectedScheduleDate
-                            ? "No sessions available for the selected date."
-                            : "Select a date first."}
-                        </div>
-                      )}
-                    </div>
-                    {selectedScheduleDate && unavailableTimeSessions.length > 0 ? (
-                      <p className="mt-3 rounded-sm border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-                        Doctor not available during{" "}
-                        {unavailableTimeSessions
-                          .map((sessionValue) =>
-                            getTimeSessionLabel(sessionValue).toLowerCase(),
-                          )
-                          .join(", ")}
-                        .
-                      </p>
-                    ) : null}
-                  </FormField>
-
-                  <FormField
-                    label="Available time slots"
-                    hint={
-                      selectedTimeSession
-                        ? `${getTimeSessionLabel(selectedTimeSession)} schedule for the selected date.`
-                        : "Choose a time of day to see exact slots."
-                    }
-                  >
-                    <input type="hidden" {...form.register("scheduledAt")} />
-                    <div className="rounded-sm border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        <span className="inline-flex items-center gap-2">
-                          <span className="size-3 rounded-full bg-emerald-500" />
-                          Available
-                        </span>
-                        <span className="inline-flex items-center gap-2">
-                          <span className="size-3 rounded-full bg-rose-400" />
-                          Booked
-                        </span>
-                        <span className="inline-flex items-center gap-2">
-                          <span className="size-3 rounded-full bg-orange-500" />
-                          Selected
-                        </span>
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                        {displayedTimeSlots.length > 0 ? (
-                          displayedTimeSlots.map(({ time, isAvailable, isBooked }) => {
-                            const isSelected = selectedScheduleTime === time;
-
-                            return (
-                              <button
-                                key={time}
-                                className={cn(
-                                  "rounded-sm border px-3 py-3 text-sm font-semibold transition",
-                                  isSelected
-                                    ? "border-orange-300 bg-orange-50 text-orange-700"
-                                    : isAvailable
-                                      ? "border-emerald-200 bg-white text-slate-800 hover:border-emerald-400 hover:bg-emerald-50"
-                                      : "cursor-not-allowed border-rose-200 bg-rose-50 text-rose-500 opacity-80",
-                                )}
-                                disabled={isBooked}
-                                onClick={() => {
-                                  form.setValue(
-                                    "scheduledAt",
-                                    `${selectedScheduleDate}T${time}`,
-                                    {
-                                      shouldDirty: true,
-                                      shouldTouch: true,
-                                      shouldValidate: true,
-                                    },
-                                  );
-                                  setSelectedTimeSession(getTimeSession(time));
-                                }}
-                                type="button"
-                              >
-                                {formatTimeLabel(time)}
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div className="col-span-full rounded-sm border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-400">
-                            {selectedTimeSession
-                              ? `No ${getTimeSessionLabel(selectedTimeSession).toLowerCase()} slots available for this date.`
-                              : "Choose a time of day to view exact slots."}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </FormField>
+                  {/* Schedule date and time removed — walk-in / quick queue will auto-assign schedule */}
                 </div>
 
                 {visitType === "teleconsultation" ? (
@@ -1265,14 +1058,7 @@ export function AppointmentsPage() {
                   className="w-full rounded-none bg-orange-600 px-5 py-3 text-sm font-extrabold uppercase tracking-widest hover:bg-orange-700 sm:w-auto"
                   disabled={
                     createAppointmentMutation.isPending ||
-                    updateAppointmentMutation.isPending ||
-                    !selectedScheduleDate ||
-                    !selectedScheduleTime ||
-                    selectedTimeIsBlocked ||
-                    selectedDateIsPast ||
-                    selectedTimeIsPast ||
-                    (availableTimeSlots.length === 0 &&
-                      !isEditingCurrentScheduledAt)
+                    updateAppointmentMutation.isPending
                   }
                   type="submit"
                 >
