@@ -229,14 +229,6 @@ function padToTwoDigits(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function formatDateForInput(date: Date) {
-  return [
-    date.getFullYear(),
-    padToTwoDigits(date.getMonth() + 1),
-    padToTwoDigits(date.getDate()),
-  ].join("-");
-}
-
 type VitalAlertLevel = "normal" | "warning" | "critical";
 
 type VitalAlert = {
@@ -986,23 +978,6 @@ export function WalkInWizardModal({
     });
   };
 
-  const applyQuickBirthDate = (date: Date) => {
-    const safeDate = new Date(date);
-    const now = new Date();
-    if (safeDate > now) {
-      return;
-    }
-    const formatted = formatDateForInput(safeDate);
-    const [year, month, day] = formatted.split("-");
-    setSelectedBirthYear(year ?? "");
-    setSelectedBirthMonth(month ?? "");
-    setSelectedBirthDay(day ?? "");
-    form.setValue("patient.birthDate", formatted, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-  };
-
   useEffect(() => {
     if (!open) {
       return;
@@ -1064,6 +1039,24 @@ export function WalkInWizardModal({
     selectedPatientFirstName,
     selectedPatientLastName,
   ]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (!selectedPatientBirthDate) {
+      setSelectedBirthYear("");
+      setSelectedBirthMonth("");
+      setSelectedBirthDay("");
+      return;
+    }
+
+    const [year = "", month = "", day = ""] = selectedPatientBirthDate.split("-");
+    setSelectedBirthYear(year);
+    setSelectedBirthMonth(month);
+    setSelectedBirthDay(day);
+  }, [open, selectedPatientBirthDate]);
 
   useEffect(() => {
     if (!open) {
@@ -1742,11 +1735,63 @@ export function WalkInWizardModal({
                   error={form.formState.errors.patient?.birthDate?.message}
                   label="Birth date"
                 >
-                  <Input
-                    disabled={isUsingExistingPatient}
-                    type="date"
-                    {...form.register("patient.birthDate")}
-                  />
+                  <div className="space-y-2">
+                    <Input type="hidden" {...form.register("patient.birthDate")} />
+                    <div className="grid grid-cols-3 gap-2">
+                      <Select
+                        aria-label="Birth month"
+                        disabled={isUsingExistingPatient}
+                        onChange={(event) =>
+                          handleBirthDatePartChange("month", event.target.value)
+                        }
+                        value={selectedBirthMonth}
+                      >
+                        <option value="">Month</option>
+                        {availableBirthMonthOptions.map((month) => (
+                          <option key={month.value} value={month.value}>
+                            {month.label}
+                          </option>
+                        ))}
+                      </Select>
+                      <Select
+                        aria-label="Birth day"
+                        disabled={
+                          isUsingExistingPatient ||
+                          !selectedBirthYear ||
+                          !selectedBirthMonth
+                        }
+                        onChange={(event) =>
+                          handleBirthDatePartChange("day", event.target.value)
+                        }
+                        value={selectedBirthDay}
+                      >
+                        <option value="">Day</option>
+                        {birthDayOptions.map((day) => (
+                          <option key={day} value={day}>
+                            {day}
+                          </option>
+                        ))}
+                      </Select>
+                      <Select
+                        aria-label="Birth year"
+                        disabled={isUsingExistingPatient}
+                        onChange={(event) =>
+                          handleBirthDatePartChange("year", event.target.value)
+                        }
+                        value={selectedBirthYear}
+                      >
+                        <option value="">Year</option>
+                        {birthYearOptions.map((year) => (
+                          <option key={year} value={year}>
+                            {year}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Choose Month, Day, and Year. Future dates are disabled.
+                    </p>
+                  </div>
                 </FormField>
                 <FormField label="Age">
                   <Input
