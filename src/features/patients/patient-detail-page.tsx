@@ -35,7 +35,10 @@ import {
 import { getDatabase } from "../../lib/local-db";
 import { printHtmlDocument } from "../../lib/print";
 import { queryKeys } from "../../lib/query-keys";
-import { listInventoryItemsLiveOrDemo } from "../../lib/supabase-clinic";
+import {
+  listInventoryItemsLiveOrDemo,
+  type DoctorDirectoryItem,
+} from "../../lib/supabase-clinic";
 import { formatDateLabel, formatDateTimeLabel } from "../../lib/utils";
 import type { MedicalCertificate, Prescription } from "../../types/domain";
 import { useAuth } from "../auth/auth-context";
@@ -339,6 +342,24 @@ function resolveDoctorPostNominals(input: {
   }
 
   return "";
+}
+
+function findProviderByConsultationDoctorId(
+  providers: DoctorDirectoryItem[],
+  doctorId: string | null | undefined,
+) {
+  const normalizedDoctorId = (doctorId ?? "").trim();
+  if (!normalizedDoctorId) {
+    return null;
+  }
+
+  return (
+    providers.find(
+      (provider) =>
+        provider.id === normalizedDoctorId ||
+        provider.profileId === normalizedDoctorId,
+    ) ?? null
+  );
 }
 
 async function buildPatientQrSvgMarkup(value: string) {
@@ -1330,9 +1351,10 @@ export function PatientDetailPage() {
         (consultation) => consultation.id === consultationId,
       ) ?? null;
     const linkedDoctor = linkedConsultation
-      ? (providers.find(
-          (provider) => provider.id === linkedConsultation.doctorId,
-        ) ?? null)
+      ? findProviderByConsultationDoctorId(
+          providers,
+          linkedConsultation.doctorId,
+        )
       : null;
     const nextAppointment = linkedConsultation
       ? `${linkedConsultation.consultationDate} ${linkedConsultation.consultationTime}`
@@ -1435,9 +1457,10 @@ export function PatientDetailPage() {
         (consultation) => consultation.id === medicalCertificate.consultationId,
       ) ?? null;
     const linkedDoctor = linkedConsultation
-      ? (providers.find(
-          (provider) => provider.id === linkedConsultation.doctorId,
-        ) ?? null)
+      ? findProviderByConsultationDoctorId(
+          providers,
+          linkedConsultation.doctorId,
+        )
       : null;
     const doctorNameRaw =
       linkedDoctor?.fullName ??
