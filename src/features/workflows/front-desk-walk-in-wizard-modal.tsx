@@ -43,7 +43,9 @@ const walkInWizardSchema = z.object({
     lastName: z.string().min(2, "Last name is required."),
     sex: z.enum(["male", "female", "other"]),
     birthDate: z.string().min(1, "Birth date is required."),
-    mobileNumber: z.string().min(5, "Mobile number is required."),
+    mobileNumber: z
+      .string()
+      .regex(/^\d{11}$/, "Mobile number must be exactly 11 digits."),
     email: z.string().email("Enter a valid email address."),
     address: z.string().min(4, "Address is required."),
     bloodType: z.string().min(1, "Blood type is required."),
@@ -52,7 +54,7 @@ const walkInWizardSchema = z.object({
     emergencyContactName: z.string().min(2, "Emergency contact is required."),
     emergencyContactPhone: z
       .string()
-      .min(5, "Emergency contact phone is required."),
+      .regex(/^\d{11}$/, "Emergency contact phone must be exactly 11 digits."),
     temperature: z.string().optional(),
     bloodPressure: z.string().optional(),
     heartRate: z.string().optional(),
@@ -135,6 +137,10 @@ type WalkInWizardStage = "patient" | "appointment" | "billing" | "complete";
 
 function getDefaultWalkInScheduledAtValue() {
   return `${getPhilippineDateKey()}T${getPhilippineTimeKey().slice(0, 5)}`;
+}
+
+function sanitizeMobileNumber(value: string) {
+  return value.replace(/\D/g, "").slice(0, 11);
 }
 
 export function WalkInWizardModal({
@@ -763,7 +769,7 @@ export function WalkInWizardModal({
       receptionistName: profile?.fullName ?? "N/A",
       paymentMethod:
         values.paymentStatus === "paid"
-          ? values.paymentType ?? "cash"
+          ? (values.paymentType ?? "cash")
           : createdInvoice.paymentStatus,
       paymentReference:
         values.paymentStatus === "paid" && values.paymentType !== "cash"
@@ -1063,7 +1069,21 @@ export function WalkInWizardModal({
                 >
                   <Input
                     disabled={isUsingExistingPatient}
-                    {...form.register("patient.mobileNumber")}
+                    inputMode="numeric"
+                    maxLength={11}
+                    pattern="[0-9]*"
+                    {...form.register("patient.mobileNumber", {
+                      setValueAs: (value) =>
+                        sanitizeMobileNumber(String(value ?? "")),
+                      onChange: (event) => {
+                        const sanitized = sanitizeMobileNumber(
+                          event.target.value,
+                        );
+                        if (sanitized !== event.target.value) {
+                          event.target.value = sanitized;
+                        }
+                      },
+                    })}
                   />
                 </FormField>
                 <FormField
@@ -1146,7 +1166,21 @@ export function WalkInWizardModal({
                 >
                   <Input
                     disabled={isUsingExistingPatient}
-                    {...form.register("patient.emergencyContactPhone")}
+                    inputMode="numeric"
+                    maxLength={11}
+                    pattern="[0-9]*"
+                    {...form.register("patient.emergencyContactPhone", {
+                      setValueAs: (value) =>
+                        sanitizeMobileNumber(String(value ?? "")),
+                      onChange: (event) => {
+                        const sanitized = sanitizeMobileNumber(
+                          event.target.value,
+                        );
+                        if (sanitized !== event.target.value) {
+                          event.target.value = sanitized;
+                        }
+                      },
+                    })}
                   />
                 </FormField>
               </div>
