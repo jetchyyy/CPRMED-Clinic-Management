@@ -23,6 +23,7 @@ import { PortalBookPage } from "../features/booking/portal-book-page";
 import { PortalHomePage } from "../features/booking/portal-home-page";
 import { ConsultationEntryPage } from "../features/consultation/consultation-entry-page";
 import { DashboardPage } from "../features/dashboard/dashboard-page";
+import { AnalyticsDashboardPage } from "../features/analytics/analytics-page";
 import { DoctorAvailabilityPage } from "../features/doctor/doctor-availability-page";
 import { SpecialistReferralsPage } from "../features/referrals/specialist-referrals-page";
 import { ReferralsListPage } from "../features/referrals/specialist-frontdesk-list-page";
@@ -33,6 +34,7 @@ import { PosPage } from "../features/pos/pos-page";
 import { PatientDetailPage } from "../features/patients/patient-detail-page";
 import { PatientActionLogsPage } from "../features/patients/patient-action-logs-page";
 import { PatientQrLookupPage } from "../features/patients/patient-qr-lookup-page";
+import { PatientsBulkAddPage } from "../features/patients/patients-bulk-add-page";
 import { PatientsPage } from "../features/patients/patients-page";
 import { StaffProfilePage } from "../features/staff/staff-profile-page";
 import { SettingsClinicPage } from "../features/settings/settings-clinic-page";
@@ -42,6 +44,7 @@ import { SettingsSupportPage } from "../features/settings/settings-support-page"
 import { SettingsRolesPage } from "../features/settings/settings-roles-page";
 import { SettingsUsersPage } from "../features/settings/settings-users-page";
 import { SettingsDocumentsPage } from "../features/settings/settings-documents-page";
+import { SettingsPromoCodesPage } from "../features/settings/settings-promo-codes-page";
 import { NotFoundPage } from "../features/shared/not-found-page";
 import { OdcPage } from "../features/shared/odc-page";
 import { TeleconsultRoomPage } from "../features/teleconsult/teleconsult-room-page";
@@ -221,7 +224,10 @@ export const router = createBrowserRouter([
               },
               {
                 element: <ModuleGate moduleKey="dashboard" />,
-                children: [{ path: "dashboard", element: <DashboardPage /> }],
+                children: [
+                  { path: "dashboard", element: <DashboardPage /> },
+                  { path: "analytics", element: <AnalyticsDashboardPage /> },
+                ],
               },
               {
                 element: <ModuleGate moduleKey="patient_management" />,
@@ -256,6 +262,15 @@ export const router = createBrowserRouter([
                         children: [
                           { index: true, element: <ConsultationEntryPage /> },
                         ],
+                      },
+                    ],
+                  },
+                  {
+                    element: <PermissionGate permission="patients.manage" />,
+                    children: [
+                      {
+                        path: "patients/bulk",
+                        element: <PatientsBulkAddPage />,
                       },
                     ],
                   },
@@ -428,8 +443,14 @@ export const router = createBrowserRouter([
                     element: <PermissionGate permission="hmo.view" />,
                     children: [
                       { path: "hmo", element: <HmoDashboardPage /> },
-                      { path: "hmo/accounts", element: <PatientHmoAccountsPage /> },
-                      { path: "hmo/authorizations", element: <HmoAuthorizationsPage /> },
+                      {
+                        path: "hmo/accounts",
+                        element: <PatientHmoAccountsPage />,
+                      },
+                      {
+                        path: "hmo/authorizations",
+                        element: <HmoAuthorizationsPage />,
+                      },
                     ],
                   },
                   {
@@ -440,9 +461,7 @@ export const router = createBrowserRouter([
                       { path: "hmo/payments", element: <HmoPaymentsPage /> },
                       {
                         element: (
-                          <ProtectedRoute
-                            allowedRoles={["owner_admin"]}
-                          />
+                          <ProtectedRoute allowedRoles={["owner_admin"]} />
                         ),
                         children: [
                           { path: "hmo/reports", element: <HmoReportsPage /> },
@@ -466,6 +485,7 @@ export const router = createBrowserRouter([
               { path: "settings/users", element: <SettingsUsersPage /> },
               { path: "settings/roles", element: <SettingsRolesPage /> },
               { path: "settings/support", element: <SettingsSupportPage /> },
+              { path: "settings/promo-codes", element: <SettingsPromoCodesPage /> },
               {
                 path: "settings/documents",
                 element: <SettingsDocumentsPage />,
