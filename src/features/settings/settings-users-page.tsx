@@ -198,8 +198,8 @@ function downloadBulkTemplateExcel() {
       'consultationFee',
       'followUpFee',
     ],
-    ['Jose', 'Ramirez', 'jose.ramirez@example.com', '09171234567', 'TempPass123', 'doctor', 'doctor', 'MD', '12345', '2026-12-31', '12345', '67890', '800', '500'],
-    ['Jose', 'Ramirez2', 'jose.ramirez2@example.com', '09171234568', 'TempPass123', 'doctor', 'doctor', 'MD, MBAH, PHD', '12346', '2026-12-31', '12346', '67891', '800', '500'],
+    ['Jose', 'Ramirez', 'jose.ramirez@example.com', '09171234567', 'TestPass123', 'doctor', 'doctor', 'MD', '12345', '2026-12-31', '12345', '67890', '800', '500'],
+    ['Jose', 'Ramirez2', 'jose.ramirez2@example.com', '09171234568', 'TestPass123', 'doctor', 'doctor', 'MD, MBAH, PHD', '12346', '2026-12-31', '12346', '67891', '800', '500'],
   ];
 
   const sheet = XLSX.utils.aoa_to_sheet(rows);
