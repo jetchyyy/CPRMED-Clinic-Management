@@ -60,6 +60,7 @@ import {
   useRecordInventoryUsage,
   useUpdatePatient,
   useUpdatePrescription,
+  usePatientInventoryUsageLogs,
 } from "./hooks/use-patients";
 import { buildMedicalCertificatePrintDocument } from "./medical-certificate-print-document";
 import { buildPrescriptionPrintDocument } from "./prescription-print-document";
@@ -569,11 +570,9 @@ export function PatientDetailPage() {
   const labOrders = patient
     ? database.labOrders.filter((order) => order.patientId === patient.id)
     : [];
-  const inventoryUsageLogs = patient
-    ? database.inventoryUsageLogs
-        .filter((log) => log.patientId === patient.id)
-        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    : [];
+  const { data: inventoryUsageLogs = [] } = usePatientInventoryUsageLogs(
+    patientId || null,
+  );
   const [labSearch, setLabSearch] = useState("");
   const [labStatusFilter, setLabStatusFilter] = useState("all");
   const [labExpanded, setLabExpanded] = useState(false);
@@ -641,6 +640,7 @@ export function PatientDetailPage() {
     testName: "",
     instruction: "",
   });
+  const [labRequestConsultationId, setLabRequestConsultationId] = useState("");
   const [
     isViewingLatestLabRequestDocumentFile,
     setIsViewingLatestLabRequestDocumentFile,
@@ -2076,7 +2076,7 @@ export function PatientDetailPage() {
     try {
       await createLabRequestDocument.mutateAsync({
         patientId: patient.id,
-        consultationId: null,
+        consultationId: labRequestConsultationId.trim() || null,
         requestedBy: profile?.id ?? null,
         targetLaboratory: "",
         requestedTests: requestedTestsText,
@@ -2092,6 +2092,7 @@ export function PatientDetailPage() {
     setShowLabRequestDocumentStatusModal(true);
     setPendingLabTests([]);
     setDraftLabTest({ testName: "", instruction: "" });
+    setLabRequestConsultationId("");
   };
 
   const handleViewLatestLabRequestDocumentFile = () => {
@@ -5181,6 +5182,21 @@ export function PatientDetailPage() {
                     void handleCreateLabRequestDocument();
                   }}
                 >
+                  <FormField label="Consultation record (optional)">
+                    <Select
+                      value={labRequestConsultationId}
+                      onChange={(e) => setLabRequestConsultationId(e.target.value)}
+                    >
+                      <option value="">Select consultation (optional)</option>
+                      {consultations.map((consultation) => (
+                        <option key={consultation.id} value={consultation.id}>
+                          {consultation.consultationDate}{" "}
+                          {consultation.consultationTime} -{" "}
+                          {consultation.diagnosis || consultation.consultationType}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold text-slate-700">
