@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   CalendarCheck2,
+  Flag,
   Pencil,
   Plus,
   Search,
@@ -80,18 +81,25 @@ const appointmentSchema = z
     ]),
     source: z.enum(["internal", "portal"]),
     visitType: z.enum(["in_person", "teleconsultation"]),
-    reason: z.string().min(4, "Reason for visit must be at least 4 characters."),
+    reason: z
+      .string()
+      .min(4, "Reason for visit must be at least 4 characters."),
     notes: z.string().min(2, "Notes must be at least 2 characters."),
     teleconsultationPlatform: z.string().optional(),
     teleconsultationUrl: z.string().optional(),
     teleconsultationAccessInstructions: z.string().optional(),
+    isPriority: z.boolean(),
     isDoctorsOnly: z.boolean(),
     additionalDoctorIds: z.array(z.string()),
   })
-  .refine((data) => data.isDoctorsOnly || (data.patientId && data.patientId.length > 0), {
-    message: "Patient is required.",
-    path: ["patientId"],
-  });
+  .refine(
+    (data) =>
+      data.isDoctorsOnly || (data.patientId && data.patientId.length > 0),
+    {
+      message: "Patient is required.",
+      path: ["patientId"],
+    },
+  );
 
 const APPOINTMENTS_PAGE_SIZE = 10;
 
@@ -181,14 +189,20 @@ export function AppointmentsPage() {
       teleconsultationPlatform: "Jitsi Meet",
       teleconsultationUrl: "",
       teleconsultationAccessInstructions: "",
+      isPriority: false,
       isDoctorsOnly: false,
       additionalDoctorIds: [],
     },
   });
 
   const visitType = useWatch({ control: form.control, name: "visitType" });
-  const isDoctorsOnly = useWatch({ control: form.control, name: "isDoctorsOnly" });
-  const additionalDoctorIds = useWatch({ control: form.control, name: "additionalDoctorIds" }) || [];
+  const isPriority = useWatch({ control: form.control, name: "isPriority" });
+  const isDoctorsOnly = useWatch({
+    control: form.control,
+    name: "isDoctorsOnly",
+  });
+  const additionalDoctorIds =
+    useWatch({ control: form.control, name: "additionalDoctorIds" }) || [];
   const scheduledAtValue = useWatch({
     control: form.control,
     name: "scheduledAt",
@@ -286,7 +300,9 @@ export function AppointmentsPage() {
   const filteredAppointments = useMemo(
     () =>
       appointments.filter((appointment) => {
-        const patient = appointment.patientId ? patientMap.get(appointment.patientId) : null;
+        const patient = appointment.patientId
+          ? patientMap.get(appointment.patientId)
+          : null;
         const patientName = patient
           ? `${patient.firstName} ${patient.lastName}`
           : "Doctors Collaboration Meeting";
@@ -427,6 +443,7 @@ export function AppointmentsPage() {
       teleconsultationPlatform: "Jitsi Meet",
       teleconsultationUrl: "",
       teleconsultationAccessInstructions: "",
+      isPriority: false,
       isDoctorsOnly: false,
       additionalDoctorIds: [],
     });
@@ -475,6 +492,7 @@ export function AppointmentsPage() {
       teleconsultationUrl: appointment.teleconsultationUrl ?? "",
       teleconsultationAccessInstructions:
         appointment.teleconsultationAccessInstructions ?? "",
+      isPriority: appointment.isPriority ?? false,
       isDoctorsOnly: !appointment.patientId,
       additionalDoctorIds: appointment.additionalDoctorIds || [],
     });
@@ -501,11 +519,14 @@ export function AppointmentsPage() {
       ? toUtcIsoFromPhilippineDateTime(values.scheduledAt)
       : new Date().toISOString();
 
+    const selectedServiceType = serviceMap.get(values.serviceId)?.serviceType;
+
     const basePayload = {
-      patientId: values.isDoctorsOnly ? null : (values.patientId || null),
+      patientId: values.isDoctorsOnly ? null : values.patientId || null,
       doctorId: values.doctorId,
       specialtyId: values.specialtyId ?? "",
       serviceId: values.serviceId,
+      serviceType: selectedServiceType ?? "medical_service",
       scheduledAt: scheduledAtUtc,
       status: values.status,
       source: values.source,
@@ -524,6 +545,7 @@ export function AppointmentsPage() {
         values.visitType === "teleconsultation"
           ? values.teleconsultationAccessInstructions || undefined
           : undefined,
+      isPriority: values.isPriority,
       additionalDoctorIds: values.additionalDoctorIds || [],
     };
 
@@ -606,10 +628,14 @@ export function AppointmentsPage() {
           variant: "success",
         });
 
-        const patient = values.patientId ? patientMap.get(values.patientId) : null;
+        const patient = values.patientId
+          ? patientMap.get(values.patientId)
+          : null;
         const patientName = patient
           ? `${patient.firstName} ${patient.lastName}`
-          : (values.isDoctorsOnly ? "Doctors Collaboration Meeting" : "Patient");
+          : values.isDoctorsOnly
+            ? "Doctors Collaboration Meeting"
+            : "Patient";
 
         if (!values.isDoctorsOnly) {
           openQueuePrint({
@@ -638,7 +664,9 @@ export function AppointmentsPage() {
   });
 
   const handleDeleteAppointment = async (appointment: Appointment) => {
-    const patient = appointment.patientId ? patientMap.get(appointment.patientId) : null;
+    const patient = appointment.patientId
+      ? patientMap.get(appointment.patientId)
+      : null;
     const patientName = patient
       ? `${patient.firstName} ${patient.lastName}`
       : "this patient";
@@ -741,7 +769,9 @@ export function AppointmentsPage() {
               </thead>
               <tbody>
                 {paginatedAppointments.map((appointment) => {
-                  const patient = appointment.patientId ? patientMap.get(appointment.patientId) : null;
+                  const patient = appointment.patientId
+                    ? patientMap.get(appointment.patientId)
+                    : null;
                   const doctor = doctorMap.get(appointment.doctorId);
                   const service = serviceMap.get(appointment.serviceId);
 
@@ -763,11 +793,16 @@ export function AppointmentsPage() {
                         <div className="space-y-0.5 text-sm">
                           <p className="text-slate-700">
                             {doctor?.fullName}
-                            {appointment.additionalDoctorIds && appointment.additionalDoctorIds.length > 0 && (
-                              <span className="ml-1.5 inline-flex items-center rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-600/10">
-                                +{appointment.additionalDoctorIds.length} doctor{appointment.additionalDoctorIds.length > 1 ? "s" : ""}
-                              </span>
-                            )}
+                            {appointment.additionalDoctorIds &&
+                              appointment.additionalDoctorIds.length > 0 && (
+                                <span className="ml-1.5 inline-flex items-center rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-600/10">
+                                  +{appointment.additionalDoctorIds.length}{" "}
+                                  doctor
+                                  {appointment.additionalDoctorIds.length > 1
+                                    ? "s"
+                                    : ""}
+                                </span>
+                              )}
                           </p>
                           <p className="text-xs text-slate-500">
                             {service?.name}
@@ -944,7 +979,10 @@ export function AppointmentsPage() {
                       className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 size-4"
                       {...form.register("isDoctorsOnly")}
                     />
-                    <label htmlFor="isDoctorsOnly" className="text-sm font-medium text-slate-700">
+                    <label
+                      htmlFor="isDoctorsOnly"
+                      className="text-sm font-medium text-slate-700"
+                    >
                       Doctors-Only Meeting (Collaboration)
                     </label>
                   </div>
@@ -1006,7 +1044,10 @@ export function AppointmentsPage() {
                           onClick={() => {
                             setIsAddDoctorOpen(!isAddDoctorOpen);
                             setDoctorSearchQuery("");
-                            setTimeout(() => doctorSearchInputRef.current?.focus(), 50);
+                            setTimeout(
+                              () => doctorSearchInputRef.current?.focus(),
+                              50,
+                            );
                           }}
                         >
                           <Plus className="size-3.5" />
@@ -1024,7 +1065,9 @@ export function AppointmentsPage() {
                                   className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-emerald-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-100"
                                   placeholder="Search doctors..."
                                   value={doctorSearchQuery}
-                                  onChange={(e) => setDoctorSearchQuery(e.target.value)}
+                                  onChange={(e) =>
+                                    setDoctorSearchQuery(e.target.value)
+                                  }
                                 />
                               </div>
                             </div>
@@ -1036,7 +1079,9 @@ export function AppointmentsPage() {
                                     !additionalDoctorIds.includes(doctor.id) &&
                                     doctor.fullName
                                       .toLowerCase()
-                                      .includes(doctorSearchQuery.toLowerCase()),
+                                      .includes(
+                                        doctorSearchQuery.toLowerCase(),
+                                      ),
                                 )
                                 .map((doctor) => (
                                   <li key={doctor.id}>
@@ -1044,16 +1089,28 @@ export function AppointmentsPage() {
                                       type="button"
                                       className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-slate-700 transition hover:bg-emerald-50 hover:text-emerald-800"
                                       onClick={() => {
-                                        const currentIds = form.getValues("additionalDoctorIds") || [];
-                                        form.setValue("additionalDoctorIds", [...currentIds, doctor.id]);
+                                        const currentIds =
+                                          form.getValues(
+                                            "additionalDoctorIds",
+                                          ) || [];
+                                        form.setValue("additionalDoctorIds", [
+                                          ...currentIds,
+                                          doctor.id,
+                                        ]);
                                         setIsAddDoctorOpen(false);
                                         setDoctorSearchQuery("");
                                       }}
                                     >
                                       <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold text-emerald-700">
-                                        {doctor.fullName.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+                                        {doctor.fullName
+                                          .split(" ")
+                                          .map((w) => w[0])
+                                          .join("")
+                                          .slice(0, 2)}
                                       </span>
-                                      <span className="truncate font-medium">{doctor.fullName}</span>
+                                      <span className="truncate font-medium">
+                                        {doctor.fullName}
+                                      </span>
                                     </button>
                                   </li>
                                 ))}
@@ -1066,7 +1123,9 @@ export function AppointmentsPage() {
                                     .includes(doctorSearchQuery.toLowerCase()),
                               ).length === 0 && (
                                 <li className="px-3 py-4 text-center text-xs text-slate-400 italic">
-                                  {doctorSearchQuery ? "No matching doctors" : "All doctors already added"}
+                                  {doctorSearchQuery
+                                    ? "No matching doctors"
+                                    : "All doctors already added"}
                                 </li>
                               )}
                             </ul>
@@ -1087,15 +1146,23 @@ export function AppointmentsPage() {
                               className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 py-1 pl-1 pr-2.5 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200/80 transition hover:ring-emerald-300"
                             >
                               <span className="flex size-5 items-center justify-center rounded-full bg-emerald-200 text-[9px] font-bold text-emerald-800">
-                                {doc.fullName.split(" ").map((w) => w[0]).join("").slice(0, 2)}
+                                {doc.fullName
+                                  .split(" ")
+                                  .map((w) => w[0])
+                                  .join("")
+                                  .slice(0, 2)}
                               </span>
                               {doc.fullName}
                               <button
                                 type="button"
                                 className="ml-0.5 inline-flex items-center justify-center rounded-full p-0.5 text-emerald-600 transition hover:bg-emerald-200 hover:text-emerald-900"
                                 onClick={() => {
-                                  const currentIds = form.getValues("additionalDoctorIds") || [];
-                                  form.setValue("additionalDoctorIds", currentIds.filter((id) => id !== docId));
+                                  const currentIds =
+                                    form.getValues("additionalDoctorIds") || [];
+                                  form.setValue(
+                                    "additionalDoctorIds",
+                                    currentIds.filter((id) => id !== docId),
+                                  );
                                 }}
                                 aria-label={`Remove ${doc.fullName}`}
                               >
@@ -1162,6 +1229,36 @@ export function AppointmentsPage() {
                         <option value="portal">Portal</option>
                       </Select>
                     </FormField>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                        Queue priority
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        Flag this appointment for faster front desk routing.
+                      </p>
+                    </div>
+                    <Button
+                      className={cn(
+                        "h-8 px-3 text-[11px] font-semibold uppercase tracking-wide",
+                        isPriority
+                          ? "bg-amber-600 text-white hover:bg-amber-700"
+                          : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                      )}
+                      onClick={() =>
+                        form.setValue("isPriority", !isPriority, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        })
+                      }
+                      type="button"
+                      variant="secondary"
+                    >
+                      <Flag className="mr-1 size-3.5" />
+                      {isPriority ? "Priority on" : "Mark priority"}
+                    </Button>
                   </div>
                   {/* Schedule date and time removed — walk-in / quick queue will auto-assign schedule */}
                 </div>

@@ -234,6 +234,7 @@ export interface Appointment extends BaseRecord {
   doctorId: string;
   specialtyId: string;
   serviceId: string;
+  serviceType?: ServiceType | null;
   bookingId?: string | null;
   scheduledAt: string;
   status: AppointmentStatus;
@@ -243,6 +244,7 @@ export interface Appointment extends BaseRecord {
   notes: string;
   queue_number?: string | null;
   estimated_end?: string | null;
+  isPriority?: boolean | null;
   teleconsultationPlatform?: string | null;
   teleconsultationUrl?: string | null;
   teleconsultationAccessInstructions?: string | null;
@@ -283,7 +285,7 @@ export interface Consultation extends BaseRecord {
   assessment?: string;
   plan?: string;
   outcome?: string;
-  payoutStatus?: 'pending' | 'paid';
+  payoutStatus?: "pending" | "paid";
   payoutSettledAt?: string | null;
 }
 
@@ -379,7 +381,7 @@ export interface InvoiceItem extends BaseRecord {
   unitPrice: number;
   category: "consultation" | "laboratory" | "medicine" | "other";
   referenceId?: string | null;
-  referenceType?: 'consultation' | 'inventory_usage' | 'lab_order' | null;
+  referenceType?: "consultation" | "inventory_usage" | "lab_order" | null;
 }
 
 export interface Invoice extends BaseRecord {
@@ -388,12 +390,11 @@ export interface Invoice extends BaseRecord {
   invoiceNumber: string;
   paymentStatus: PaymentStatus;
   subtotal: number;
-  discountType?: 'none' | 'senior' | 'pwd' | 'philhealth' | 'custom' | null;
+  discountType?: "none" | "senior" | "pwd" | "philhealth" | "custom" | null;
   discountAmount?: number | null;
   taxAmount?: number | null;
   total: number;
 }
-
 
 export interface Payment extends BaseRecord {
   invoiceId: string;

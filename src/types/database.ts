@@ -433,10 +433,12 @@ export interface Database {
           doctor_id: string | null;
           specialty_id: string | null;
           service_id: string | null;
+          service_type: string | null;
           booking_id: string | null;
           scheduled_at: string;
           queue_number: string | null;
           estimated_end: string | null;
+          is_priority: boolean | null;
           status: string;
           source: string;
           visit_type: string;

@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Flag } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
@@ -74,6 +75,7 @@ const walkInWizardSchema = z.object({
     scheduledAt: z.string().min(1, "Schedule is required."),
     reason: z.string().min(4, "Reason is required."),
     notes: z.string().min(2, "Notes are required."),
+    isPriority: z.boolean(),
   }),
   billing: z
     .object({
@@ -705,6 +707,7 @@ export function WalkInWizardModal({
         scheduledAt: getDefaultWalkInScheduledAtValue(),
         reason: "Walk-in consultation",
         notes: "Front desk walk-in flow",
+        isPriority: false,
       },
       billing: {
         patientId: "",
@@ -715,11 +718,16 @@ export function WalkInWizardModal({
         paymentStatus: "paid",
         items: [
           {
-            description: "General Consultation",
+            description: defaultService?.name ?? "Consultation",
             category: "consultation",
             quantity: 1,
-            unitPrice:
-              defaultService?.price ?? defaultDoctor?.consultationFee ?? 800,
+            unitPrice: defaultDoctor?.consultationFee ?? 800,
+          },
+          {
+            description: `${defaultService?.name ?? "Service"} - Follow Up`,
+            category: "other",
+            quantity: 1,
+            unitPrice: defaultDoctor?.followUpFee ?? 600,
           },
         ],
       },
@@ -743,6 +751,7 @@ export function WalkInWizardModal({
   const selectedPatientRespiratoryRate = form.watch("patient.respiratoryRate");
   const selectedPatientWeight = form.watch("patient.weight");
   const selectedPatientHeight = form.watch("patient.height");
+  const selectedAppointmentPriority = form.watch("appointment.isPriority");
   const selectedBillingPaymentStatus = form.watch("billing.paymentStatus");
   const selectedBillingPatientId = form.watch("billing.patientId");
   const billingLineItems = form.watch("billing.items");
@@ -822,6 +831,41 @@ export function WalkInWizardModal({
     services.find((service) => service.id === selectedServiceId) ?? null;
   const selectedDoctor =
     doctors.find((doctor) => doctor.id === selectedDoctorId) ?? null;
+
+  // Update billing items when doctor or service changes
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (selectedDoctor) {
+      const consultationFee = selectedDoctor.consultationFee ?? 0;
+      const followUpFee = selectedDoctor.followUpFee ?? 0;
+
+      form.setValue(
+        "billing.items",
+        [
+          {
+            description: selectedService?.name ?? "Consultation",
+            category: "consultation",
+            quantity: 1,
+            unitPrice: consultationFee,
+          },
+          {
+            description: `${selectedService?.name ?? "Service"} - Follow Up`,
+            category: "other",
+            quantity: 1,
+            unitPrice: followUpFee,
+          },
+        ],
+        {
+          shouldDirty: true,
+          shouldValidate: false,
+        },
+      );
+    }
+  }, [open, selectedDoctor, selectedService, form]);
+
   const filteredInvoicePatients = useMemo(() => {
     const query = invoicePatientSearch.trim().toLowerCase();
 
@@ -1132,6 +1176,7 @@ export function WalkInWizardModal({
         scheduledAt: getDefaultWalkInScheduledAtValue(),
         reason: "Walk-in consultation",
         notes: "Front desk walk-in flow",
+        isPriority: false,
       },
       billing: {
         patientId: "",
@@ -1142,11 +1187,16 @@ export function WalkInWizardModal({
         paymentStatus: "paid",
         items: [
           {
-            description: defaultService?.name ?? "General Consultation",
+            description: defaultService?.name ?? "Consultation",
             category: "consultation",
             quantity: 1,
-            unitPrice:
-              defaultService?.price ?? defaultDoctor?.consultationFee ?? 800,
+            unitPrice: defaultDoctor?.consultationFee ?? 800,
+          },
+          {
+            description: `${defaultService?.name ?? "Service"} - Follow Up`,
+            category: "other",
+            quantity: 1,
+            unitPrice: defaultDoctor?.followUpFee ?? 600,
           },
         ],
       },
@@ -1349,6 +1399,8 @@ export function WalkInWizardModal({
       defaultSpecialtyId ||
       specialties[0]?.id ||
       "";
+    const resolvedServiceType =
+      selectedService?.serviceType ?? "medical_service";
 
     let queueNumber = "ODC-QUE-000001";
     try {
@@ -1401,12 +1453,14 @@ export function WalkInWizardModal({
       doctorId: values.doctorId,
       specialtyId: resolvedSpecialtyId,
       serviceId: values.serviceId,
+      serviceType: resolvedServiceType,
       scheduledAt: scheduledAtUtc,
       status: values.status,
       source: values.source,
       visitType: values.visitType,
       reason: values.reason,
       notes: values.notes,
+      isPriority: values.isPriority,
       teleconsultationPlatform: undefined,
       teleconsultationUrl: undefined,
       teleconsultationAccessInstructions: undefined,
@@ -1502,6 +1556,7 @@ export function WalkInWizardModal({
         visitType: createdAppointment.visitType,
         reason: createdAppointment.reason,
         notes: createdAppointment.notes,
+        isPriority: createdAppointment.isPriority ?? false,
         teleconsultationPlatform:
           createdAppointment.teleconsultationPlatform ?? undefined,
         teleconsultationUrl:
@@ -2219,6 +2274,42 @@ export function WalkInWizardModal({
                   <option value="teleconsultation">Teleconsultation</option>
                 </Select>
               </FormField>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                    Queue priority
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Flag this walk-in to move ahead in the front desk queue.
+                  </p>
+                </div>
+                <Button
+                  className={
+                    selectedAppointmentPriority
+                      ? "h-8 bg-amber-600 px-3 text-[11px] font-semibold uppercase tracking-wide text-white hover:bg-amber-700"
+                      : "h-8 border border-slate-200 bg-white px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-50"
+                  }
+                  onClick={() =>
+                    form.setValue(
+                      "appointment.isPriority",
+                      !selectedAppointmentPriority,
+                      {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      },
+                    )
+                  }
+                  type="button"
+                  variant="secondary"
+                >
+                  <Flag className="mr-1 size-3.5" />
+                  {selectedAppointmentPriority
+                    ? "Priority on"
+                    : "Mark priority"}
+                </Button>
+              </div>
 
               <div className="rounded-sm border border-dashed border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900">
                 Appointment schedule is now queue-based. When you create this

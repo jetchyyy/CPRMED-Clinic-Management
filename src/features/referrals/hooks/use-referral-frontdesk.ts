@@ -113,6 +113,7 @@ function toDbTime(t: string): string {
 // ─── Hook ──────────────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 8;
+const REFRESH_INTERVAL_MS = 5000;
 
 export interface UseReferralFrontdeskReturn {
   patients: PatientWithReferral[];
@@ -122,7 +123,6 @@ export interface UseReferralFrontdeskReturn {
   selectedSchedule: SpecialistSchedule | null;
   selectedDate: string;
   selectedTime: string;
-  // Booked slots for the selected specialist — passed to the schedule UI
   bookedSlots: BookedSlot[];
   loading: boolean;
   schedulesLoading: boolean;
@@ -215,7 +215,6 @@ export function useReferralFrontdesk(): UseReferralFrontdeskReturn {
     useState<SpecialistSchedule | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedTime, setSelectedTime] = useState<string>("");
-  // ── NEW: booked slots for the currently selected specialist ──
   const [bookedSlots, setBookedSlots] = useState<BookedSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [schedulesLoading, setSchedulesLoading] = useState(false);
@@ -258,171 +257,167 @@ export function useReferralFrontdesk(): UseReferralFrontdeskReturn {
     return filteredPatients.slice(start, start + PAGE_SIZE);
   }, [filteredPatients, safePage]);
 
-  // ── Fetch patients with referrals ──────────────────────────────────────────
-  useEffect(() => {
-    async function fetchPatients() {
-      setLoading(true);
-      setError(null);
-      try {
-        if (!isSupabaseConfigured) {
-          setPatients([]);
-          return;
-        }
-        const client = requireSupabase();
+  // ── Fetch patients with referrals ────────────────────────────────────────────
 
-        const { data: apptData, error: apptError } = await client
-          .from("appointments")
-          .select("id, patient_id, doctor_id, related_referral_id")
-          .not("related_referral_id", "is", null)
-          .is("deleted_at", null);
-        if (apptError) throw apptError;
-
-        const appts = (apptData ?? []) as AppointmentRow[];
-        if (appts.length === 0) {
-          setPatients([]);
-          return;
-        }
-
-        const patientIds = [...new Set(appts.map((a) => a.patient_id))];
-        const referralIds = [
-          ...new Set(appts.map((a) => a.related_referral_id!)),
-        ];
-
-        const { data: patientsData, error: patientsError } = await client
-          .from("patients")
-          .select("id, first_name, last_name")
-          .in("id", patientIds);
-        if (patientsError) throw patientsError;
-        const patientMap = new Map(
-          (patientsData ?? ([] as PatientRow[])).map((p: PatientRow) => [
-            p.id,
-            p,
-          ]),
-        );
-
-        const { data: referralsData, error: referralsError } = await client
-          .from("referrals")
-          .select("id, target_doctor_id")
-          .in("id", referralIds)
-          .neq("status", "confirmed")
-          .neq("status", "scheduled");
-        if (referralsError) throw referralsError;
-        const referralMap = new Map(
-          (referralsData ?? ([] as ReferralRow[])).map((r: ReferralRow) => [
-            r.id,
-            r,
-          ]),
-        );
-
-        const doctorIds = [
-          ...new Set(
-            (referralsData ?? [])
-              .map((r: ReferralRow) => r.target_doctor_id)
-              .filter(Boolean) as string[],
-          ),
-        ];
-
-        const { data: doctorsData, error: doctorsError } = await client
-          .from("doctors")
-          .select("id, profile_id, specialty_id")
-          .in("id", doctorIds);
-        if (doctorsError) throw doctorsError;
-        const doctorMap = new Map(
-          (doctorsData ?? ([] as DoctorRow[])).map((d: DoctorRow) => [d.id, d]),
-        );
-
-        const doctorProfileIds = (doctorsData ?? []).map(
-          (d: DoctorRow) => d.profile_id,
-        );
-        const { data: profilesData, error: profilesError } = await client
-          .from("profiles")
-          .select("id, full_name")
-          .in("id", doctorProfileIds);
-        if (profilesError) throw profilesError;
-        const profileMap = new Map(
-          (profilesData ?? ([] as ProfileRow[])).map((p: ProfileRow) => [
-            p.id,
-            p,
-          ]),
-        );
-
-        const specialtyIds = [
-          ...new Set(
-            (doctorsData ?? [])
-              .map((d: DoctorRow) => d.specialty_id)
-              .filter(Boolean) as string[],
-          ),
-        ];
-        let specialtyMap = new Map<string, string>();
-        if (specialtyIds.length > 0) {
-          const { data: specialtiesData, error: specialtiesError } =
-            await client
-              .from("specialties")
-              .select("id, name")
-              .in("id", specialtyIds);
-          if (specialtiesError) throw specialtiesError;
-          specialtyMap = new Map(
-            (specialtiesData ?? ([] as SpecialtyRow[])).map(
-              (s: SpecialtyRow) => [s.id, s.name],
-            ),
-          );
-        }
-
-        const seen = new Set<string>();
-        const result: PatientWithReferral[] = [];
-        for (const appt of appts) {
-          const referralId = appt.related_referral_id!;
-          if (seen.has(referralId)) continue;
-          seen.add(referralId);
-          const patientRow = patientMap.get(appt.patient_id);
-          if (!patientRow) continue;
-          const referral = referralMap.get(referralId);
-          if (!referral?.target_doctor_id) continue;
-          const doctor = doctorMap.get(referral.target_doctor_id);
-          if (!doctor) continue;
-          const doctorProfile = profileMap.get(doctor.profile_id);
-          const specialtyName = doctor.specialty_id
-            ? (specialtyMap.get(doctor.specialty_id) ?? null)
-            : null;
-          result.push({
-            appointmentId: appt.id,
-            patient: {
-              id: patientRow.id,
-              fullName:
-                `${patientRow.first_name} ${patientRow.last_name}`.trim(),
-            },
-            doctor: {
-              id: doctor.id,
-              fullName: doctorProfile?.full_name ?? "Unknown Doctor",
-              specialtyName,
-            },
-            referralId,
-          });
-        }
-        setPatients(result);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to load patients.",
-        );
-      } finally {
-        setLoading(false);
+  const fetchPatients = useCallback(async (showLoader = false) => {
+    if (showLoader) setLoading(true);
+    setError(null);
+    try {
+      if (!isSupabaseConfigured) {
+        setPatients([]);
+        return;
       }
+      const client = requireSupabase();
+
+      const { data: apptData, error: apptError } = await client
+        .from("appointments")
+        .select("id, patient_id, doctor_id, related_referral_id")
+        .not("related_referral_id", "is", null)
+        .is("deleted_at", null);
+      if (apptError) throw apptError;
+
+      const appts = (apptData ?? []) as AppointmentRow[];
+      if (appts.length === 0) {
+        setPatients([]);
+        return;
+      }
+
+      const patientIds = [...new Set(appts.map((a) => a.patient_id))];
+      const referralIds = [
+        ...new Set(appts.map((a) => a.related_referral_id!)),
+      ];
+
+      const { data: patientsData, error: patientsError } = await client
+        .from("patients")
+        .select("id, first_name, last_name")
+        .in("id", patientIds);
+      if (patientsError) throw patientsError;
+      const patientMap = new Map(
+        (patientsData ?? ([] as PatientRow[])).map((p: PatientRow) => [
+          p.id,
+          p,
+        ]),
+      );
+
+      const { data: referralsData, error: referralsError } = await client
+        .from("referrals")
+        .select("id, target_doctor_id")
+        .in("id", referralIds)
+        .neq("status", "confirmed")
+        .neq("status", "scheduled");
+      if (referralsError) throw referralsError;
+      const referralMap = new Map(
+        (referralsData ?? ([] as ReferralRow[])).map((r: ReferralRow) => [
+          r.id,
+          r,
+        ]),
+      );
+
+      const doctorIds = [
+        ...new Set(
+          (referralsData ?? [])
+            .map((r: ReferralRow) => r.target_doctor_id)
+            .filter(Boolean) as string[],
+        ),
+      ];
+
+      const { data: doctorsData, error: doctorsError } = await client
+        .from("doctors")
+        .select("id, profile_id, specialty_id")
+        .in("id", doctorIds);
+      if (doctorsError) throw doctorsError;
+      const doctorMap = new Map(
+        (doctorsData ?? ([] as DoctorRow[])).map((d: DoctorRow) => [d.id, d]),
+      );
+
+      const doctorProfileIds = (doctorsData ?? []).map(
+        (d: DoctorRow) => d.profile_id,
+      );
+      const { data: profilesData, error: profilesError } = await client
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", doctorProfileIds);
+      if (profilesError) throw profilesError;
+      const profileMap = new Map(
+        (profilesData ?? ([] as ProfileRow[])).map((p: ProfileRow) => [
+          p.id,
+          p,
+        ]),
+      );
+
+      const specialtyIds = [
+        ...new Set(
+          (doctorsData ?? [])
+            .map((d: DoctorRow) => d.specialty_id)
+            .filter(Boolean) as string[],
+        ),
+      ];
+      let specialtyMap = new Map<string, string>();
+      if (specialtyIds.length > 0) {
+        const { data: specialtiesData, error: specialtiesError } = await client
+          .from("specialties")
+          .select("id, name")
+          .in("id", specialtyIds);
+        if (specialtiesError) throw specialtiesError;
+        specialtyMap = new Map(
+          (specialtiesData ?? ([] as SpecialtyRow[])).map((s: SpecialtyRow) => [
+            s.id,
+            s.name,
+          ]),
+        );
+      }
+
+      const seen = new Set<string>();
+      const result: PatientWithReferral[] = [];
+      for (const appt of appts) {
+        const referralId = appt.related_referral_id!;
+        if (seen.has(referralId)) continue;
+        seen.add(referralId);
+        const patientRow = patientMap.get(appt.patient_id);
+        if (!patientRow) continue;
+        const referral = referralMap.get(referralId);
+        if (!referral?.target_doctor_id) continue;
+        const doctor = doctorMap.get(referral.target_doctor_id);
+        if (!doctor) continue;
+        const doctorProfile = profileMap.get(doctor.profile_id);
+        const specialtyName = doctor.specialty_id
+          ? (specialtyMap.get(doctor.specialty_id) ?? null)
+          : null;
+        result.push({
+          appointmentId: appt.id,
+          patient: {
+            id: patientRow.id,
+            fullName: `${patientRow.first_name} ${patientRow.last_name}`.trim(),
+          },
+          doctor: {
+            id: doctor.id,
+            fullName: doctorProfile?.full_name ?? "Unknown Doctor",
+            specialtyName,
+          },
+          referralId,
+        });
+      }
+      setPatients(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load patients.");
+    } finally {
+      if (showLoader) setLoading(false);
     }
-    void fetchPatients();
   }, []);
 
-  // ── Fetch schedules AND booked slots when patient selected ─────────────────
-  const selectPatient = useCallback((patient: PatientWithReferral) => {
-    setSelectedPatient(patient);
-    setSelectedSchedule(null);
-    setSelectedDate("");
-    setSelectedTime("");
-    setBookedSlots([]);
-    setBookingError(null);
-    setBookingSuccess(false);
+  useEffect(() => {
+    void fetchPatients(true);
+    const intervalId = window.setInterval(() => {
+      void fetchPatients();
+    }, REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [fetchPatients]);
 
-    async function fetchSchedulesAndBookedSlots() {
-      setSchedulesLoading(true);
+  // ── Fetch schedules + booked slots for a specialist ──────────────────────────
+
+  const fetchSchedulesAndBookedSlots = useCallback(
+    async (patient: PatientWithReferral, showLoader = false) => {
+      if (showLoader) setSchedulesLoading(true);
       try {
         if (!isSupabaseConfigured) {
           setSchedules([]);
@@ -430,7 +425,6 @@ export function useReferralFrontdesk(): UseReferralFrontdeskReturn {
         }
         const client = requireSupabase();
 
-        // Fetch schedules
         const { data: schedData, error: schedError } = await client
           .from("specialist_schedules")
           .select("*")
@@ -441,8 +435,6 @@ export function useReferralFrontdesk(): UseReferralFrontdeskReturn {
           ((schedData ?? []) as SpecialistScheduleRow[]).map(mapScheduleRow),
         );
 
-        // ── Fetch ALL booked slots for this specialist ──
-        // This is the data that drives the pink/blocked slot display in the UI
         const { data: bookedData, error: bookedError } = await client
           .from("specialist_appointments")
           .select("slot_date, slot_time")
@@ -453,7 +445,7 @@ export function useReferralFrontdesk(): UseReferralFrontdeskReturn {
         setBookedSlots(
           ((bookedData ?? []) as SpecialistAppointmentRow[]).map((row) => ({
             date: row.slot_date,
-            time: row.slot_time, // kept as-is ("HH:MM:SS"), normalizeTime handles it in the UI
+            time: row.slot_time,
           })),
         );
       } catch (err) {
@@ -461,12 +453,37 @@ export function useReferralFrontdesk(): UseReferralFrontdeskReturn {
           err instanceof Error ? err.message : "Failed to load schedules.",
         );
       } finally {
-        setSchedulesLoading(false);
+        if (showLoader) setSchedulesLoading(false);
       }
-    }
+    },
+    [],
+  );
 
-    void fetchSchedulesAndBookedSlots();
-  }, []);
+  // ── Select patient ───────────────────────────────────────────────────────────
+
+  const selectPatient = useCallback(
+    (patient: PatientWithReferral) => {
+      setSelectedPatient(patient);
+      setSelectedSchedule(null);
+      setSelectedDate("");
+      setSelectedTime("");
+      setBookedSlots([]);
+      setBookingError(null);
+      setBookingSuccess(false);
+      void fetchSchedulesAndBookedSlots(patient, true);
+    },
+    [fetchSchedulesAndBookedSlots],
+  );
+
+  useEffect(() => {
+    if (!selectedPatient) return undefined;
+    const intervalId = window.setInterval(() => {
+      void fetchSchedulesAndBookedSlots(selectedPatient);
+    }, REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [fetchSchedulesAndBookedSlots, selectedPatient]);
+
+  // ── Select schedule ──────────────────────────────────────────────────────────
 
   const selectSchedule = useCallback((schedule: SpecialistSchedule) => {
     setSelectedSchedule(schedule);
@@ -475,7 +492,8 @@ export function useReferralFrontdesk(): UseReferralFrontdeskReturn {
     setBookingError(null);
   }, []);
 
-  // ── Book appointment ───────────────────────────────────────────────────────
+  // ── Book appointment ─────────────────────────────────────────────────────────
+
   const bookAppointment = useCallback(async () => {
     if (
       !selectedPatient ||
@@ -494,10 +512,8 @@ export function useReferralFrontdesk(): UseReferralFrontdeskReturn {
       if (!isSupabaseConfigured) throw new Error("Supabase is not configured.");
       const client = requireSupabase();
 
-      // Always write to DB in "HH:MM:SS" format
       const dbSlotTime = toDbTime(selectedTime);
 
-      // Double-booking check
       const { data: existing, error: checkError } = await client
         .from("specialist_appointments")
         .select("id")
@@ -563,6 +579,8 @@ export function useReferralFrontdesk(): UseReferralFrontdeskReturn {
       setBookingLoading(false);
     }
   }, [selectedPatient, selectedSchedule, selectedDate, selectedTime]);
+
+  // ── Reset ────────────────────────────────────────────────────────────────────
 
   const resetBooking = useCallback(() => {
     setSelectedPatient(null);

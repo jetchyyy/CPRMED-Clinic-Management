@@ -1,29 +1,46 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Coins, CreditCard, Eye, Pencil, Plus, Printer, Receipt, ScanLine, Search, TestTube2, Trash2, X } from 'lucide-react';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { useFieldArray, useForm } from 'react-hook-form';
-import { Link, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
-import { useQuery } from '@tanstack/react-query';
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Coins,
+  CreditCard,
+  Eye,
+  Pencil,
+  Plus,
+  Printer,
+  Receipt,
+  ScanLine,
+  Search,
+  TestTube2,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
+import { Link, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 
-import { FormField } from '../../components/forms/form-field';
-import { Button } from '../../components/ui/button';
-import { FeedbackModal } from '../../components/ui/feedback-modal';
-import { Input } from '../../components/ui/input';
-import { Select } from '../../components/ui/select';
-import { Textarea } from '../../components/ui/textarea';
-import { isModuleEnabled } from '../../config/modules';
-import { useAuth } from '../auth/auth-context';
-import { useClinicSettingsData } from '../../hooks/use-clinic-data';
-import { useAppointments } from '../appointments/hooks/use-appointments';
-import { LabServiceReceiptCard } from '../laboratory/components/lab-service-receipt-card';
-import { printHtmlDocument } from '../../lib/print';
-import { getDoctorDirectoryLiveOrDemo, listConsultationsByPatientIdLiveOrDemo, listInventoryUsageLogsByPatientIdLiveOrDemo } from '../../lib/supabase-clinic';
-import { formatCurrency } from '../../lib/utils';
-import { labRequestService } from '../lab-requests/api/lab-request-service';
-import { PaymentBadge } from './payment-badge';
-import { PaymentUpdateModal } from './components/payment-update-modal';
-import { buildBillingReceiptPrintDocument } from './lib/billing-receipt-print-document';
+import { FormField } from "../../components/forms/form-field";
+import { Button } from "../../components/ui/button";
+import { FeedbackModal } from "../../components/ui/feedback-modal";
+import { Input } from "../../components/ui/input";
+import { Select } from "../../components/ui/select";
+import { Textarea } from "../../components/ui/textarea";
+import { isModuleEnabled } from "../../config/modules";
+import { useAuth } from "../auth/auth-context";
+import { useClinicSettingsData } from "../../hooks/use-clinic-data";
+import { useAppointments } from "../appointments/hooks/use-appointments";
+import { LabServiceReceiptCard } from "../laboratory/components/lab-service-receipt-card";
+import { printHtmlDocument } from "../../lib/print";
+import {
+  getDoctorDirectoryLiveOrDemo,
+  listConsultationsByPatientIdLiveOrDemo,
+  listInventoryUsageLogsByPatientIdLiveOrDemo,
+} from "../../lib/supabase-clinic";
+import { formatCurrency } from "../../lib/utils";
+import { labRequestService } from "../lab-requests/api/lab-request-service";
+import { PaymentBadge } from "./payment-badge";
+import { PaymentUpdateModal } from "./components/payment-update-modal";
+import { buildBillingReceiptPrintDocument } from "./lib/billing-receipt-print-document";
 import {
   usePatients,
   useBookings,
@@ -36,7 +53,7 @@ import {
   usePayForService,
   useUpdatePayment,
   usePaymentsForInvoice,
-} from './api/billing-mutations';
+} from "./api/billing-mutations";
 
 import {
   billingSchema,
@@ -47,7 +64,7 @@ import {
   type LabReceiptState,
   type InvoiceViewState,
   BILLING_PAGE_SIZE,
-} from './types/forms';
+} from "./types/forms";
 
 type InvoiceReceiptState = {
   patientId: string;
@@ -75,22 +92,25 @@ function formatDoctorSignatureName(
   doctorName: string | null | undefined,
   postNominals?: string | null,
 ) {
-  const baseName = (doctorName ?? '').trim().replace(/^dr\.?\s+/i, '').trim();
+  const baseName = (doctorName ?? "")
+    .trim()
+    .replace(/^dr\.?\s+/i, "")
+    .trim();
   if (!baseName) {
-    return 'N/A';
+    return "N/A";
   }
 
-  const suffix = (postNominals ?? '')
+  const suffix = (postNominals ?? "")
     .trim()
-    .replace(/^,\s*/, '')
-    .replace(/^dr\.?\s+/i, '');
+    .replace(/^,\s*/, "")
+    .replace(/^dr\.?\s+/i, "");
 
   return suffix ? `${baseName}, ${suffix}` : baseName;
 }
 
 async function resolveLatestDoctorAssignedName(patientId: string) {
   if (!patientId) {
-    return 'N/A';
+    return "N/A";
   }
 
   try {
@@ -104,11 +124,13 @@ async function resolveLatestDoctorAssignedName(patientId: string) {
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
 
     if (!latestConsultation) {
-      return 'N/A';
+      return "N/A";
     }
 
     if (latestConsultation.doctorId) {
-      const matchedDoctor = doctors.find((doctor) => doctor.id === latestConsultation.doctorId);
+      const matchedDoctor = doctors.find(
+        (doctor) => doctor.id === latestConsultation.doctorId,
+      );
       return formatDoctorSignatureName(
         matchedDoctor?.fullName ?? latestConsultation.providerName,
         matchedDoctor?.title ?? null,
@@ -119,48 +141,55 @@ async function resolveLatestDoctorAssignedName(patientId: string) {
       return formatDoctorSignatureName(latestConsultation.providerName);
     }
 
-    return 'N/A';
+    return "N/A";
   } catch {
-    return 'N/A';
+    return "N/A";
   }
 }
-
-
-
-
 
 export function BillingPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: clinicSettings } = useClinicSettingsData();
   const { profile } = useAuth();
-  const bookingEnabled = isModuleEnabled('booking_appointments', clinicSettings?.enabledModules);
-  const laboratoryEnabled = isModuleEnabled('laboratory', clinicSettings?.enabledModules);
-  const [search, setSearch] = useState('');
-  const [invoicePatientSearch, setInvoicePatientSearch] = useState('');
-  const [isInvoicePatientDropdownOpen, setIsInvoicePatientDropdownOpen] = useState(false);
+  const bookingEnabled = isModuleEnabled(
+    "booking_appointments",
+    clinicSettings?.enabledModules,
+  );
+  const laboratoryEnabled = isModuleEnabled(
+    "laboratory",
+    clinicSettings?.enabledModules,
+  );
+  const [search, setSearch] = useState("");
+  const [invoicePatientSearch, setInvoicePatientSearch] = useState("");
+  const [isInvoicePatientDropdownOpen, setIsInvoicePatientDropdownOpen] =
+    useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [isPayServiceModalOpen, setIsPayServiceModalOpen] = useState(false);
-  const [isPaymentUpdateModalOpen, setIsPaymentUpdateModalOpen] = useState(false);
+  const [isPaymentUpdateModalOpen, setIsPaymentUpdateModalOpen] =
+    useState(false);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
-  const [updatingPaymentInvoiceId, setUpdatingPaymentInvoiceId] = useState<string | null>(null);
+  const [updatingPaymentInvoiceId, setUpdatingPaymentInvoiceId] = useState<
+    string | null
+  >(null);
   const [feedbackModal, setFeedbackModal] = useState<FeedbackModalState>({
     open: false,
-    title: '',
-    message: '',
-    variant: 'success',
+    title: "",
+    message: "",
+    variant: "success",
   });
   const [labReceiptState, setLabReceiptState] = useState<LabReceiptState>({
     open: false,
     invoice: null,
     request: null,
-    patientName: '',
+    patientName: "",
   });
   const [invoiceViewState, setInvoiceViewState] = useState<InvoiceViewState>({
     open: false,
     invoiceId: null,
   });
-  const [invoiceReceiptState, setInvoiceReceiptState] = useState<InvoiceReceiptState>(null);
+  const [invoiceReceiptState, setInvoiceReceiptState] =
+    useState<InvoiceReceiptState>(null);
   const deferredSearch = useDeferredValue(search);
 
   const { data: patients = [] } = usePatients();
@@ -185,99 +214,133 @@ export function BillingPage() {
 
   const updatePaymentMutation = useUpdatePayment();
 
-  const { data: paymentsForViewedInvoice = [] } = usePaymentsForInvoice(invoiceViewState.invoiceId || '');
-  const { data: paymentsForEditingInvoice = [] } = usePaymentsForInvoice(editingInvoiceId || '');
+  const { data: paymentsForViewedInvoice = [] } = usePaymentsForInvoice(
+    invoiceViewState.invoiceId || "",
+  );
+  const { data: paymentsForEditingInvoice = [] } = usePaymentsForInvoice(
+    editingInvoiceId || "",
+  );
 
   const form = useForm<BillingFormValues>({
     resolver: zodResolver(billingSchema),
     defaultValues: {
-      patientId: '',
-      bookingId: '',
-      paymentStatus: 'unpaid',
-      paymentType: 'cash',
-      referenceNumber: '',
+      patientId: "",
+      bookingId: "",
+      paymentStatus: "unpaid",
+      paymentType: "cash",
+      referenceNumber: "",
       items: [
         {
-          description: 'General Consultation',
-          category: 'consultation',
+          description: "General Consultation",
+          category: "consultation",
           quantity: 1,
           unitPrice: 800,
         },
       ],
     },
   });
-  const itemsFieldArray = useFieldArray({ control: form.control, name: 'items' });
+  const itemsFieldArray = useFieldArray({
+    control: form.control,
+    name: "items",
+  });
 
   const payServiceForm = useForm<PayForServiceFormValues>({
     resolver: zodResolver(payForServiceSchema),
     defaultValues: {
-      patientId: patients[0]?.id ?? '',
-      serviceId: '',
-      notes: '',
+      patientId: patients[0]?.id ?? "",
+      serviceId: "",
+      notes: "",
       urgentFlag: false,
     },
   });
 
-  const selectedBookingId = form.watch('bookingId');
-  const selectedPatientId = form.watch('patientId');
-  const selectedInvoicePaymentStatus = form.watch('paymentStatus');
-  const selectedInvoicePaymentType = form.watch('paymentType');
+  const selectedBookingId = form.watch("bookingId");
+  const selectedPatientId = form.watch("patientId");
+  const selectedInvoicePaymentStatus = form.watch("paymentStatus");
+  const selectedInvoicePaymentType = form.watch("paymentType");
 
   // Query patient unbilled resources and clinic directory
   const { data: doctors = [] } = useQuery({
-    queryKey: ['doctors'],
+    queryKey: ["doctors"],
     queryFn: () => getDoctorDirectoryLiveOrDemo(),
   });
 
   const { data: patientConsultations = [] } = useQuery({
-    queryKey: ['patient-consultations', selectedPatientId],
+    queryKey: ["patient-consultations", selectedPatientId],
     queryFn: () => listConsultationsByPatientIdLiveOrDemo(selectedPatientId),
     enabled: !!selectedPatientId,
   });
 
   const { data: inventoryLogs = [] } = useQuery({
-    queryKey: ['patient-inventory-logs', selectedPatientId],
-    queryFn: () => listInventoryUsageLogsByPatientIdLiveOrDemo(selectedPatientId),
+    queryKey: ["patient-inventory-logs", selectedPatientId],
+    queryFn: () =>
+      listInventoryUsageLogsByPatientIdLiveOrDemo(selectedPatientId),
     enabled: !!selectedPatientId,
   });
 
   const { data: patientRequests = [] } = useQuery({
-    queryKey: ['patient-requests', selectedPatientId],
+    queryKey: ["patient-requests", selectedPatientId],
     queryFn: () => labRequestService.getPatientRequests(selectedPatientId),
     enabled: !!selectedPatientId,
   });
 
   const alreadyBilledItemIds = useMemo(() => {
-    return new Set(invoiceItems.map((item) => item.referenceId).filter(Boolean));
+    return new Set(
+      invoiceItems.map((item) => item.referenceId).filter(Boolean),
+    );
   }, [invoiceItems]);
 
-  const currentFormItems = form.watch('items') || [];
+  const currentFormItems = form.watch("items") || [];
   const currentFormItemRefs = useMemo(() => {
-    return new Set(currentFormItems.map((item) => item.referenceId).filter(Boolean));
+    return new Set(
+      currentFormItems.map((item) => item.referenceId).filter(Boolean),
+    );
   }, [currentFormItems]);
 
   const unbilledConsultations = useMemo(() => {
     if (!selectedPatientId) return [];
     return patientConsultations.filter(
-      (c) => !alreadyBilledItemIds.has(c.id) && !currentFormItemRefs.has(c.id)
+      (c) => !alreadyBilledItemIds.has(c.id) && !currentFormItemRefs.has(c.id),
     );
-  }, [patientConsultations, selectedPatientId, alreadyBilledItemIds, currentFormItemRefs]);
+  }, [
+    patientConsultations,
+    selectedPatientId,
+    alreadyBilledItemIds,
+    currentFormItemRefs,
+  ]);
 
   const unbilledInventoryLogs = useMemo(() => {
     if (!selectedPatientId) return [];
     return inventoryLogs.filter(
-      (log) => !alreadyBilledItemIds.has(log.id) && !currentFormItemRefs.has(log.id)
+      (log) =>
+        !alreadyBilledItemIds.has(log.id) && !currentFormItemRefs.has(log.id),
     );
-  }, [inventoryLogs, selectedPatientId, alreadyBilledItemIds, currentFormItemRefs]);
+  }, [
+    inventoryLogs,
+    selectedPatientId,
+    alreadyBilledItemIds,
+    currentFormItemRefs,
+  ]);
 
   const unbilledLabRequests = useMemo(() => {
     if (!selectedPatientId) return [];
     return patientRequests.filter(
-      (req) => req.paymentStatus !== 'paid' && !alreadyBilledItemIds.has(req.id) && !currentFormItemRefs.has(req.id)
+      (req) =>
+        req.paymentStatus !== "paid" &&
+        !alreadyBilledItemIds.has(req.id) &&
+        !currentFormItemRefs.has(req.id),
     );
-  }, [patientRequests, selectedPatientId, alreadyBilledItemIds, currentFormItemRefs]);
+  }, [
+    patientRequests,
+    selectedPatientId,
+    alreadyBilledItemIds,
+    currentFormItemRefs,
+  ]);
 
-  const totalUnbilledCount = unbilledConsultations.length + unbilledInventoryLogs.length + unbilledLabRequests.length;
+  const totalUnbilledCount =
+    unbilledConsultations.length +
+    unbilledInventoryLogs.length +
+    unbilledLabRequests.length;
 
   const importConsultation = (c: any) => {
     const doctorId = c.doctorId;
@@ -285,64 +348,79 @@ export function BillingPage() {
     const fee = matchedDoctor?.consultationFee ?? 800;
 
     itemsFieldArray.append({
-      description: `Consultation - ${c.consultationType} (Dr. ${matchedDoctor?.fullName ?? c.providerName ?? 'Staff'})`,
-      category: 'consultation',
+      description: `Consultation - ${c.consultationType} (Dr. ${matchedDoctor?.fullName ?? c.providerName ?? "Staff"})`,
+      category: "consultation",
       quantity: 1,
       unitPrice: fee,
       referenceId: c.id,
-      referenceType: 'consultation',
+      referenceType: "consultation",
     });
-    toast.success('Consultation imported successfully');
+    toast.success("Consultation imported successfully");
   };
 
   const importInventoryLog = (log: any) => {
     itemsFieldArray.append({
       description: `Item - ${log.itemId} (Qty: ${log.quantity})`,
-      category: 'medicine',
+      category: "medicine",
       quantity: log.quantity,
       unitPrice: log.unitPrice ?? 0,
       referenceId: log.id,
-      referenceType: 'inventory_usage',
+      referenceType: "inventory_usage",
     });
-    toast.success('Inventory log imported successfully');
+    toast.success("Inventory log imported successfully");
   };
 
   const importLabRequest = (req: any) => {
-    const matchedService = labServiceOptions.find((s: any) => s.id === req.serviceId || s.name === req.serviceName);
+    const matchedService = labServiceOptions.find(
+      (s: any) => s.id === req.serviceId || s.name === req.serviceName,
+    );
     const fee = matchedService?.serviceFee ?? 0;
 
     itemsFieldArray.append({
-      description: `Laboratory - ${req.serviceName || 'Service'}`,
-      category: 'laboratory',
+      description: `Laboratory - ${req.serviceName || "Service"}`,
+      category: "laboratory",
       quantity: 1,
       unitPrice: fee,
       referenceId: req.id,
-      referenceType: 'lab_order',
+      referenceType: "lab_order",
     });
-    toast.success('Lab order imported successfully');
+    toast.success("Lab order imported successfully");
   };
 
-  const formItems = form.watch('items') || [];
-  const discountType = form.watch('discountType') || 'none';
-  const discountAmount = form.watch('discountAmount') || 0;
-  const taxAmount = form.watch('taxAmount') || 0;
+  const formItems = form.watch("items") || [];
+  const discountType = form.watch("discountType") || "none";
+  const discountAmount = form.watch("discountAmount") || 0;
+  const taxAmount = form.watch("taxAmount") || 0;
 
   const subtotal = useMemo(() => {
-    return formItems.reduce((sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0), 0);
+    return formItems.reduce(
+      (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
+      0,
+    );
   }, [formItems]);
 
   useEffect(() => {
-    if (discountType === 'senior' || discountType === 'pwd') {
-      const calculated = Math.round(subtotal * 0.20 * 100) / 100;
-      form.setValue('discountAmount', calculated, { shouldDirty: true, shouldValidate: true });
-    } else if (discountType === 'none') {
-      form.setValue('discountAmount', 0, { shouldDirty: true, shouldValidate: true });
+    if (discountType === "senior" || discountType === "pwd") {
+      const calculated = Math.round(subtotal * 0.2 * 100) / 100;
+      form.setValue("discountAmount", calculated, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    } else if (discountType === "none") {
+      form.setValue("discountAmount", 0, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
   }, [discountType, subtotal, form]);
 
-  const selectedBooking = bookings.find((booking) => booking.id === selectedBookingId) ?? null;
-  const selectedLabServiceId = payServiceForm.watch('serviceId');
-  const selectedLabService = labServiceOptions.find((service: any) => service.id === selectedLabServiceId) ?? null;
+  const selectedBooking =
+    bookings.find((booking) => booking.id === selectedBookingId) ?? null;
+  const selectedLabServiceId = payServiceForm.watch("serviceId");
+  const selectedLabService =
+    labServiceOptions.find(
+      (service: any) => service.id === selectedLabServiceId,
+    ) ?? null;
   const filteredInvoicePatients = useMemo(() => {
     const query = invoicePatientSearch.trim().toLowerCase();
     if (!query) {
@@ -354,10 +432,18 @@ export function BillingPage() {
       return fullName.includes(query);
     });
   }, [invoicePatientSearch, patients]);
-  const selectedPatient = patients.find((patient) => patient.id === selectedPatientId) ?? null;
+  const selectedPatient =
+    patients.find((patient) => patient.id === selectedPatientId) ?? null;
 
-  const selectInvoicePatient = (patient: { id: string; firstName: string; lastName: string }) => {
-    form.setValue('patientId', patient.id, { shouldDirty: true, shouldValidate: true });
+  const selectInvoicePatient = (patient: {
+    id: string;
+    firstName: string;
+    lastName: string;
+  }) => {
+    form.setValue("patientId", patient.id, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
     setInvoicePatientSearch(`${patient.firstName} ${patient.lastName}`);
     setIsInvoicePatientDropdownOpen(false);
   };
@@ -366,7 +452,7 @@ export function BillingPage() {
     () =>
       invoices.filter((invoice) => {
         const patient = patients.find((item) => item.id === invoice.patientId);
-        return `${invoice.invoiceNumber} ${patient?.firstName ?? ''} ${patient?.lastName ?? ''} ${invoice.paymentStatus}`
+        return `${invoice.invoiceNumber} ${patient?.firstName ?? ""} ${patient?.lastName ?? ""} ${invoice.paymentStatus}`
           .toLowerCase()
           .includes(deferredSearch.toLowerCase());
       }),
@@ -374,14 +460,17 @@ export function BillingPage() {
   );
   const invoiceSummary = useMemo(
     () => ({
-      paid: invoices.filter((inv) => inv.paymentStatus === 'paid').length,
-      unpaid: invoices.filter((inv) => inv.paymentStatus === 'unpaid').length,
-      partial: invoices.filter((inv) => inv.paymentStatus === 'partial').length,
+      paid: invoices.filter((inv) => inv.paymentStatus === "paid").length,
+      unpaid: invoices.filter((inv) => inv.paymentStatus === "unpaid").length,
+      partial: invoices.filter((inv) => inv.paymentStatus === "partial").length,
     }),
     [invoices],
   );
 
-  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / BILLING_PAGE_SIZE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredInvoices.length / BILLING_PAGE_SIZE),
+  );
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStart = (safeCurrentPage - 1) * BILLING_PAGE_SIZE;
   const paginatedInvoices = useMemo(
@@ -393,9 +482,14 @@ export function BillingPage() {
     filteredInvoices.length === 0
       ? 0
       : Math.min(pageStart + BILLING_PAGE_SIZE, filteredInvoices.length);
-  const viewedInvoice = invoices.find((invoice) => invoice.id === invoiceViewState.invoiceId) ?? null;
-  const viewedInvoiceItems = invoiceItems.filter((item) => item.invoiceId === invoiceViewState.invoiceId);
-  const viewedInvoicePatient = patients.find((patient) => patient.id === viewedInvoice?.patientId) ?? null;
+  const viewedInvoice =
+    invoices.find((invoice) => invoice.id === invoiceViewState.invoiceId) ??
+    null;
+  const viewedInvoiceItems = invoiceItems.filter(
+    (item) => item.invoiceId === invoiceViewState.invoiceId,
+  );
+  const viewedInvoicePatient =
+    patients.find((patient) => patient.id === viewedInvoice?.patientId) ?? null;
   const viewedInvoiceReceiptState = useMemo<InvoiceReceiptState>(() => {
     if (!viewedInvoice) {
       return null;
@@ -403,19 +497,23 @@ export function BillingPage() {
 
     const latestPayment = paymentsForViewedInvoice[0] ?? null;
     const paymentMethodMap: Record<string, string> = {
-      cash: 'cash',
-      gcash: 'gcash',
-      bank_transfer: 'bank transfer',
-      other: 'other',
+      cash: "cash",
+      gcash: "gcash",
+      bank_transfer: "bank transfer",
+      other: "other",
     };
 
     return {
       patientId: viewedInvoice.patientId,
       invoiceNumber: viewedInvoice.invoiceNumber,
-      customerName: viewedInvoicePatient ? `${viewedInvoicePatient.firstName} ${viewedInvoicePatient.lastName}` : 'Walk-in customer',
-      doctorAssignedName: 'N/A',
-      receptionistName: profile?.fullName ?? 'N/A',
-      paymentMethod: latestPayment ? paymentMethodMap[latestPayment.method] ?? latestPayment.method : viewedInvoice.paymentStatus,
+      customerName: viewedInvoicePatient
+        ? `${viewedInvoicePatient.firstName} ${viewedInvoicePatient.lastName}`
+        : "Walk-in customer",
+      doctorAssignedName: "N/A",
+      receptionistName: profile?.fullName ?? "N/A",
+      paymentMethod: latestPayment
+        ? (paymentMethodMap[latestPayment.method] ?? latestPayment.method)
+        : viewedInvoice.paymentStatus,
       paymentReference: latestPayment?.referenceNumber ?? null,
       issuedAt: viewedInvoice.createdAt,
       subtotal: viewedInvoice.subtotal,
@@ -430,16 +528,24 @@ export function BillingPage() {
         lineTotal: item.quantity * item.unitPrice,
       })),
     };
-  }, [paymentsForViewedInvoice, profile?.fullName, viewedInvoice, viewedInvoiceItems, viewedInvoicePatient]);
+  }, [
+    paymentsForViewedInvoice,
+    profile?.fullName,
+    viewedInvoice,
+    viewedInvoiceItems,
+    viewedInvoicePatient,
+  ]);
   // const viewedInvoiceLabItem = viewedInvoiceItems.find((item) => item.category === 'laboratory') ?? viewedInvoiceItem;
 
   useEffect(() => {
-    const invoiceIdFromQuery = (searchParams.get('invoiceId') ?? '').trim();
+    const invoiceIdFromQuery = (searchParams.get("invoiceId") ?? "").trim();
     if (!invoiceIdFromQuery || invoices.length === 0) {
       return;
     }
 
-    const matchedInvoice = invoices.find((invoice) => invoice.id === invoiceIdFromQuery);
+    const matchedInvoice = invoices.find(
+      (invoice) => invoice.id === invoiceIdFromQuery,
+    );
     if (!matchedInvoice) {
       return;
     }
@@ -450,88 +556,102 @@ export function BillingPage() {
     });
 
     const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete('invoiceId');
+    nextParams.delete("invoiceId");
     setSearchParams(nextParams, { replace: true });
   }, [invoices, searchParams, setSearchParams]);
 
   useEffect(() => {
-    const action = (searchParams.get('action') ?? '').trim();
-    if (action !== 'create') {
+    const action = (searchParams.get("action") ?? "").trim();
+    if (action !== "create") {
       return;
     }
 
-    const patientIdFromQuery = (searchParams.get('patientId') ?? '').trim();
-    const appointmentIdFromQuery = (searchParams.get('appointmentId') ?? '').trim();
-    const bookingIdFromQuery = (searchParams.get('bookingId') ?? '').trim();
-    const linkedBooking = bookings.find((booking) => booking.id === bookingIdFromQuery) ?? null;
-    const linkedAppointment = appointments.find((appointment) => appointment.id === appointmentIdFromQuery) ?? null;
+    const patientIdFromQuery = (searchParams.get("patientId") ?? "").trim();
+    const appointmentIdFromQuery = (
+      searchParams.get("appointmentId") ?? ""
+    ).trim();
+    const bookingIdFromQuery = (searchParams.get("bookingId") ?? "").trim();
+    const linkedBooking =
+      bookings.find((booking) => booking.id === bookingIdFromQuery) ?? null;
+    const linkedAppointment =
+      appointments.find(
+        (appointment) => appointment.id === appointmentIdFromQuery,
+      ) ?? null;
 
     const resolvedPatientId =
       patientIdFromQuery ||
       linkedAppointment?.patientId ||
       linkedBooking?.patientId ||
-      '';
+      "";
     const resolvedAppointmentId =
-      appointmentIdFromQuery ||
-      linkedBooking?.appointmentId ||
-      '';
-    const resolvedBookingId = bookingIdFromQuery || '';
-    const resolvedPatient = patients.find((patient) => patient.id === resolvedPatientId) ?? null;
+      appointmentIdFromQuery || linkedBooking?.appointmentId || "";
+    const resolvedBookingId = bookingIdFromQuery || "";
+    const resolvedPatient =
+      patients.find((patient) => patient.id === resolvedPatientId) ?? null;
 
     form.reset({
       patientId: resolvedPatientId,
       bookingId: resolvedBookingId,
       appointmentId: resolvedAppointmentId,
-      paymentStatus: 'unpaid',
-      paymentType: 'cash',
-      referenceNumber: '',
+      paymentStatus: "unpaid",
+      paymentType: "cash",
+      referenceNumber: "",
       items: [
         {
-          description: 'General Consultation',
-          category: 'consultation',
+          description: "General Consultation",
+          category: "consultation",
           quantity: 1,
           unitPrice: 800,
         },
       ],
     });
     setInvoicePatientSearch(
-      resolvedPatient ? `${resolvedPatient.firstName} ${resolvedPatient.lastName}` : '',
+      resolvedPatient
+        ? `${resolvedPatient.firstName} ${resolvedPatient.lastName}`
+        : "",
     );
     setIsInvoicePatientDropdownOpen(false);
     setEditingInvoiceId(null);
     setIsInvoiceModalOpen(true);
 
     const nextParams = new URLSearchParams(searchParams);
-    nextParams.delete('action');
-    nextParams.delete('patientId');
-    nextParams.delete('appointmentId');
-    nextParams.delete('bookingId');
+    nextParams.delete("action");
+    nextParams.delete("patientId");
+    nextParams.delete("appointmentId");
+    nextParams.delete("bookingId");
     setSearchParams(nextParams, { replace: true });
   }, [appointments, bookings, form, patients, searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (payServiceForm.getValues('patientId') || patients.length === 0) {
+    if (payServiceForm.getValues("patientId") || patients.length === 0) {
       return;
     }
 
-    payServiceForm.setValue('patientId', patients[0]?.id ?? '');
+    payServiceForm.setValue("patientId", patients[0]?.id ?? "");
   }, [patients, payServiceForm]);
 
   useEffect(() => {
-    if (payServiceForm.getValues('serviceId') || labServiceOptions.length === 0) {
+    if (
+      payServiceForm.getValues("serviceId") ||
+      labServiceOptions.length === 0
+    ) {
       return;
     }
 
-    payServiceForm.setValue('serviceId', labServiceOptions[0]?.id ?? '');
+    payServiceForm.setValue("serviceId", labServiceOptions[0]?.id ?? "");
   }, [labServiceOptions, payServiceForm]);
 
   useEffect(() => {
-    if (!isInvoiceModalOpen && !isPayServiceModalOpen && !invoiceViewState.open) {
+    if (
+      !isInvoiceModalOpen &&
+      !isPayServiceModalOpen &&
+      !invoiceViewState.open
+    ) {
       return undefined;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         setIsInvoiceModalOpen(false);
         setIsPayServiceModalOpen(false);
         setInvoiceViewState({
@@ -541,25 +661,28 @@ export function BillingPage() {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [invoiceViewState.open, isInvoiceModalOpen, isPayServiceModalOpen]);
 
   useEffect(() => {
     if (updatePaymentMutation.isSuccess) {
       closePaymentUpdateModal();
-      toast.success('Payment status updated successfully');
+      toast.success("Payment status updated successfully");
     }
   }, [updatePaymentMutation.isSuccess]);
 
   useEffect(() => {
-    if (selectedInvoicePaymentStatus !== 'paid' || selectedInvoicePaymentType === 'cash') {
-      form.setValue('referenceNumber', '');
+    if (
+      selectedInvoicePaymentStatus !== "paid" ||
+      selectedInvoicePaymentType === "cash"
+    ) {
+      form.setValue("referenceNumber", "");
     }
   }, [form, selectedInvoicePaymentStatus, selectedInvoicePaymentType]);
 
   useEffect(() => {
-    if (!editingInvoiceId || selectedInvoicePaymentStatus !== 'paid') {
+    if (!editingInvoiceId || selectedInvoicePaymentStatus !== "paid") {
       return;
     }
 
@@ -568,33 +691,42 @@ export function BillingPage() {
       return;
     }
 
-    if (latestPayment.method === 'cash' || latestPayment.method === 'gcash' || latestPayment.method === 'card') {
-      form.setValue('paymentType', latestPayment.method);
-      form.setValue('referenceNumber', latestPayment.referenceNumber || '');
+    if (
+      latestPayment.method === "cash" ||
+      latestPayment.method === "gcash" ||
+      latestPayment.method === "card"
+    ) {
+      form.setValue("paymentType", latestPayment.method);
+      form.setValue("referenceNumber", latestPayment.referenceNumber || "");
     }
-  }, [editingInvoiceId, form, paymentsForEditingInvoice, selectedInvoicePaymentStatus]);
+  }, [
+    editingInvoiceId,
+    form,
+    paymentsForEditingInvoice,
+    selectedInvoicePaymentStatus,
+  ]);
 
   const openCreateModal = () => {
     form.reset({
-      patientId: '',
-      bookingId: '',
-      appointmentId: '',
-      paymentStatus: 'unpaid',
-      paymentType: 'cash',
-      referenceNumber: '',
-      discountType: 'none',
+      patientId: "",
+      bookingId: "",
+      appointmentId: "",
+      paymentStatus: "unpaid",
+      paymentType: "cash",
+      referenceNumber: "",
+      discountType: "none",
       discountAmount: 0,
       taxAmount: 0,
       items: [
         {
-          description: 'General Consultation',
-          category: 'consultation',
+          description: "General Consultation",
+          category: "consultation",
           quantity: 1,
           unitPrice: 800,
         },
       ],
     });
-    setInvoicePatientSearch('');
+    setInvoicePatientSearch("");
     setIsInvoicePatientDropdownOpen(false);
     setEditingInvoiceId(null);
     setIsInvoiceModalOpen(true);
@@ -602,9 +734,9 @@ export function BillingPage() {
 
   const openPayForServiceModal = () => {
     payServiceForm.reset({
-      patientId: patients[0]?.id ?? '',
-      serviceId: labServiceOptions[0]?.id ?? '',
-      notes: '',
+      patientId: patients[0]?.id ?? "",
+      serviceId: labServiceOptions[0]?.id ?? "",
+      notes: "",
       urgentFlag: false,
     });
     setIsPayServiceModalOpen(true);
@@ -619,12 +751,12 @@ export function BillingPage() {
 
     form.reset({
       patientId: invoice.patientId,
-      bookingId: '',
-      appointmentId: invoice.appointmentId ?? '',
-      paymentStatus: invoice.paymentStatus === 'paid' ? 'paid' : 'unpaid',
-      paymentType: 'cash',
-      referenceNumber: '',
-      discountType: invoice.discountType ?? 'none',
+      bookingId: "",
+      appointmentId: invoice.appointmentId ?? "",
+      paymentStatus: invoice.paymentStatus === "paid" ? "paid" : "unpaid",
+      paymentType: "cash",
+      referenceNumber: "",
+      discountType: invoice.discountType ?? "none",
       discountAmount: invoice.discountAmount ?? 0,
       taxAmount: invoice.taxAmount ?? 0,
       items: items.map((item) => ({
@@ -636,8 +768,13 @@ export function BillingPage() {
         referenceType: item.referenceType ?? null,
       })),
     });
-    const selectedPatient = patients.find((patient) => patient.id === invoice.patientId) ?? null;
-    setInvoicePatientSearch(selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : '');
+    const selectedPatient =
+      patients.find((patient) => patient.id === invoice.patientId) ?? null;
+    setInvoicePatientSearch(
+      selectedPatient
+        ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
+        : "",
+    );
     setIsInvoicePatientDropdownOpen(false);
     setEditingInvoiceId(invoiceId);
     setIsInvoiceModalOpen(true);
@@ -689,68 +826,113 @@ export function BillingPage() {
       open: false,
       invoice: null,
       request: null,
-      patientName: '',
+      patientName: "",
     });
   };
 
-  const onSubmit = form.handleSubmit(async (values) => {
-    try {
-      if (editingInvoiceId) {
-        await updateInvoiceMutation.mutateAsync({ invoiceId: editingInvoiceId, values, bookings, invoices, profile });
-        setFeedbackModal({
-          open: true,
-          title: 'Invoice updated',
-          message: 'The invoice details were updated successfully.',
-          variant: 'success',
-        });
-      } else {
-        const createdInvoice = await createInvoiceMutation.mutateAsync({ values, bookings, profile });
-        const selectedPatient = patients.find((patient) => patient.id === values.patientId) ?? null;
-        const markAsPaidOnCreate = values.paymentStatus === 'paid';
-        const paymentTypeOnCreate = values.paymentType ?? 'cash';
-        const referenceOnCreate =
-          paymentTypeOnCreate === 'cash' ? null : values.referenceNumber?.trim() || null;
-        const doctorAssignedName = await resolveLatestDoctorAssignedName(values.patientId);
+  const onSubmit = form.handleSubmit(
+    async (values) => {
+      try {
+        if (editingInvoiceId) {
+          await updateInvoiceMutation.mutateAsync({
+            invoiceId: editingInvoiceId,
+            values,
+            bookings,
+            invoices,
+            profile,
+          });
+          setFeedbackModal({
+            open: true,
+            title: "Invoice updated",
+            message: "The invoice details were updated successfully.",
+            variant: "success",
+          });
+        } else {
+          const createdInvoice = await createInvoiceMutation.mutateAsync({
+            values,
+            bookings,
+            profile,
+          });
+          const selectedPatient =
+            patients.find((patient) => patient.id === values.patientId) ?? null;
+          const markAsPaidOnCreate = values.paymentStatus === "paid";
+          const paymentTypeOnCreate = values.paymentType ?? "cash";
+          const referenceOnCreate =
+            paymentTypeOnCreate === "cash"
+              ? null
+              : values.referenceNumber?.trim() || null;
+          const doctorAssignedName = await resolveLatestDoctorAssignedName(
+            values.patientId,
+          );
 
-        setInvoiceReceiptState({
-          patientId: values.patientId,
-          invoiceNumber: createdInvoice.invoiceNumber,
-          customerName: selectedPatient ? `${selectedPatient.firstName} ${selectedPatient.lastName}` : 'Walk-in customer',
-          doctorAssignedName,
-          receptionistName: profile?.fullName ?? 'N/A',
-          paymentMethod: markAsPaidOnCreate ? paymentTypeOnCreate : createdInvoice.paymentStatus,
-          paymentReference: markAsPaidOnCreate ? referenceOnCreate : null,
-          issuedAt: createdInvoice.createdAt,
-          subtotal: createdInvoice.subtotal,
-          discountType: createdInvoice.discountType ?? undefined,
-          discountAmount: createdInvoice.discountAmount ?? undefined,
-          taxAmount: createdInvoice.taxAmount ?? undefined,
-          total: createdInvoice.total,
-          items: values.items.map((item) => ({
-            description: item.description,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            lineTotal: item.quantity * item.unitPrice,
-          })),
-        });
+          setInvoiceReceiptState({
+            patientId: values.patientId,
+            invoiceNumber: createdInvoice.invoiceNumber,
+            customerName: selectedPatient
+              ? `${selectedPatient.firstName} ${selectedPatient.lastName}`
+              : "Walk-in customer",
+            doctorAssignedName,
+            receptionistName: profile?.fullName ?? "N/A",
+            paymentMethod: markAsPaidOnCreate
+              ? paymentTypeOnCreate
+              : createdInvoice.paymentStatus,
+            paymentReference: markAsPaidOnCreate ? referenceOnCreate : null,
+            issuedAt: createdInvoice.createdAt,
+            subtotal: createdInvoice.subtotal,
+            discountType: createdInvoice.discountType ?? undefined,
+            discountAmount: createdInvoice.discountAmount ?? undefined,
+            taxAmount: createdInvoice.taxAmount ?? undefined,
+            total: createdInvoice.total,
+            items: values.items.map((item) => ({
+              description: item.description,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              lineTotal: item.quantity * item.unitPrice,
+            })),
+          });
+          setFeedbackModal({
+            open: true,
+            title: "Invoice created",
+            message:
+              "The invoice has been added successfully and is ready to print.",
+            variant: "success",
+          });
+        }
+
+        closeInvoiceModal();
+      } catch (error) {
         setFeedbackModal({
           open: true,
-          title: 'Invoice created',
-          message: 'The invoice has been added successfully and is ready to print.',
-          variant: 'success',
+          title: editingInvoiceId
+            ? "Unable to update invoice"
+            : "Unable to create invoice",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Something went wrong while saving the invoice.",
+          variant: "error",
         });
       }
+    },
+    (errors) => {
+      if (errors.patientId) {
+        toast.error("Select a patient before creating the invoice.");
+        return;
+      }
 
-      closeInvoiceModal();
-    } catch (error) {
-      setFeedbackModal({
-        open: true,
-        title: editingInvoiceId ? 'Unable to update invoice' : 'Unable to create invoice',
-        message: error instanceof Error ? error.message : 'Something went wrong while saving the invoice.',
-        variant: 'error',
-      });
-    }
-  });
+      if (errors.referenceNumber) {
+        toast.error("Reference number is required for GCash or Card payments.");
+        return;
+      }
+
+      if (errors.items) {
+        toast.error("Please fix the line items before saving the invoice.");
+        return;
+      }
+
+      toast.error("Please fix the highlighted fields before saving.");
+    },
+  );
 
   const handlePrintInvoiceReceipt = async () => {
     if (!invoiceReceiptState) {
@@ -758,7 +940,9 @@ export function BillingPage() {
     }
 
     try {
-      const doctorAssignedName = await resolveLatestDoctorAssignedName(invoiceReceiptState.patientId);
+      const doctorAssignedName = await resolveLatestDoctorAssignedName(
+        invoiceReceiptState.patientId,
+      );
       await printHtmlDocument(
         buildBillingReceiptPrintDocument({
           ...invoiceReceiptState,
@@ -766,18 +950,20 @@ export function BillingPage() {
         }),
       );
     } catch {
-      toast.error('The invoice receipt could not be sent to the print dialog.');
+      toast.error("The invoice receipt could not be sent to the print dialog.");
     }
   };
 
   const handlePrintViewedInvoice = async () => {
     if (!viewedInvoiceReceiptState) {
-      toast.error('No invoice is selected for printing.');
+      toast.error("No invoice is selected for printing.");
       return;
     }
 
     try {
-      const doctorAssignedName = await resolveLatestDoctorAssignedName(viewedInvoiceReceiptState.patientId);
+      const doctorAssignedName = await resolveLatestDoctorAssignedName(
+        viewedInvoiceReceiptState.patientId,
+      );
       await printHtmlDocument(
         buildBillingReceiptPrintDocument({
           ...viewedInvoiceReceiptState,
@@ -785,17 +971,21 @@ export function BillingPage() {
         }),
       );
     } catch {
-      toast.error('The invoice could not be sent to the print dialog.');
+      toast.error("The invoice could not be sent to the print dialog.");
     }
   };
 
   const handleSaveViewedInvoiceAsPdf = () => {
-    toast.message('When the print dialog opens, choose "Save as PDF" as the destination.');
+    toast.message(
+      'When the print dialog opens, choose "Save as PDF" as the destination.',
+    );
     void handlePrintViewedInvoice();
   };
 
   const handleDeleteInvoice = async (invoiceId: string) => {
-    const isConfirmed = window.confirm('Delete this invoice from billing records?');
+    const isConfirmed = window.confirm(
+      "Delete this invoice from billing records?",
+    );
     if (!isConfirmed) {
       return;
     }
@@ -804,36 +994,48 @@ export function BillingPage() {
       await deleteInvoiceMutation.mutateAsync(invoiceId);
       setFeedbackModal({
         open: true,
-        title: 'Invoice deleted',
-        message: 'The invoice was removed successfully.',
-        variant: 'success',
+        title: "Invoice deleted",
+        message: "The invoice was removed successfully.",
+        variant: "success",
       });
     } catch (error) {
       setFeedbackModal({
         open: true,
-        title: 'Unable to delete invoice',
-        message: error instanceof Error ? error.message : 'Something went wrong while deleting the invoice.',
-        variant: 'error',
+        title: "Unable to delete invoice",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Something went wrong while deleting the invoice.",
+        variant: "error",
       });
     }
   };
 
   const onSubmitPaidService = payServiceForm.handleSubmit(async (values) => {
     try {
-      await payForServiceMutation.mutateAsync({ values, profile, labServiceOptions, patients });
+      await payForServiceMutation.mutateAsync({
+        values,
+        profile,
+        labServiceOptions,
+        patients,
+      });
       setFeedbackModal({
         open: true,
-        title: 'Lab service paid',
-        message: 'Payment was recorded, the lab request was created, and the receipt is ready to print.',
-        variant: 'success',
+        title: "Lab service paid",
+        message:
+          "Payment was recorded, the lab request was created, and the receipt is ready to print.",
+        variant: "success",
       });
       closePayForServiceModal();
     } catch (error) {
       setFeedbackModal({
         open: true,
-        title: 'Unable to pay for service',
-        message: error instanceof Error ? error.message : 'Something went wrong while recording the paid laboratory service.',
-        variant: 'error',
+        title: "Unable to pay for service",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Something went wrong while recording the paid laboratory service.",
+        variant: "error",
       });
     }
   });
@@ -848,29 +1050,48 @@ export function BillingPage() {
                 <Coins className="size-5" />
               </div>
               <div>
-                <p className="text-xs font-extrabold uppercase tracking-widest text-emerald-600">Billing</p>
-                <h1 className="text-xl font-extrabold tracking-tight text-slate-950">Billing and Receipts</h1>
-                <p className="mt-1 text-sm text-slate-500">Manage invoices in a table view and create new ones from a modal form.</p>
+                <p className="text-xs font-extrabold uppercase tracking-widest text-emerald-600">
+                  Billing
+                </p>
+                <h1 className="text-xl font-extrabold tracking-tight text-slate-950">
+                  Billing and Receipts
+                </h1>
+                <p className="mt-1 text-sm text-slate-500">
+                  Manage invoices in a table view and create new ones from a
+                  modal form.
+                </p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               {bookingEnabled ? (
-                <Link className="inline-flex items-center justify-center border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" to="/app/bookings/scan">
+                <Link
+                  className="inline-flex items-center justify-center border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  to="/app/bookings/scan"
+                >
                   <Receipt className="mr-2 size-4" />
                   Scan booking receipt
                 </Link>
               ) : null}
               {laboratoryEnabled ? (
-                <Link className="inline-flex items-center justify-center border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" to="/app/laboratory/scan">
+                <Link
+                  className="inline-flex items-center justify-center border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  to="/app/laboratory/scan"
+                >
                   <ScanLine className="mr-2 size-4" />
                   Scan lab receipt
                 </Link>
               ) : null}
-              <Button className="rounded-none border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-extrabold uppercase tracking-widest text-violet-800 hover:bg-violet-100" onClick={openPayForServiceModal}>
+              <Button
+                className="rounded-none border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-extrabold uppercase tracking-widest text-violet-800 hover:bg-violet-100"
+                onClick={openPayForServiceModal}
+              >
                 <TestTube2 className="mr-2 size-4" />
                 Pay for service
               </Button>
-              <Button className="rounded-none bg-emerald-600 px-4 py-2.5 text-sm font-extrabold uppercase tracking-widest hover:bg-emerald-700" onClick={openCreateModal}>
+              <Button
+                className="rounded-none bg-emerald-600 px-4 py-2.5 text-sm font-extrabold uppercase tracking-widest hover:bg-emerald-700"
+                onClick={openCreateModal}
+              >
                 <Plus className="mr-2 size-4" />
                 New invoice
               </Button>
@@ -889,7 +1110,10 @@ export function BillingPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50 px-6 py-2.5">
-            <span className="text-xs font-bold text-slate-500">{filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''} found</span>
+            <span className="text-xs font-bold text-slate-500">
+              {filteredInvoices.length} invoice
+              {filteredInvoices.length !== 1 ? "s" : ""} found
+            </span>
             <span className="inline-flex items-center border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">
               {invoiceSummary.paid} paid
             </span>
@@ -904,7 +1128,10 @@ export function BillingPage() {
             {search ? (
               <button
                 className="ml-auto border border-slate-200 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 transition hover:bg-white"
-                onClick={() => { setSearch(''); setCurrentPage(1); }}
+                onClick={() => {
+                  setSearch("");
+                  setCurrentPage(1);
+                }}
                 type="button"
               >
                 Reset filter
@@ -920,27 +1147,39 @@ export function BillingPage() {
                 <TestTube2 className="size-4" />
               </div>
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-violet-700">Lab Service Payment</p>
-                <p className="text-sm font-bold text-slate-950">Cashier shortcut for laboratory services</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-violet-700">
+                  Lab Service Payment
+                </p>
+                <p className="text-sm font-bold text-slate-950">
+                  Cashier shortcut for laboratory services
+                </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="inline-flex items-center border border-violet-200 bg-white px-3 py-1.5 text-xs text-slate-600">
-                <span className="mr-1.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Source —</span>
+                <span className="mr-1.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                  Source —
+                </span>
                 Fees come from the live lab catalog.
               </span>
               <span className="inline-flex items-center border border-violet-200 bg-white px-3 py-1.5 text-xs text-slate-600">
-                <span className="mr-1.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Receipt —</span>
+                <span className="mr-1.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                  Receipt —
+                </span>
                 Printed QR links to the exact paid lab request.
               </span>
             </div>
           </div>
         </div>
 
-        {labReceiptState.open && labReceiptState.invoice && labReceiptState.request ? (
+        {labReceiptState.open &&
+        labReceiptState.invoice &&
+        labReceiptState.request ? (
           <div className="border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-              <p className="text-xs font-extrabold uppercase tracking-widest text-slate-500">Receipt Preview</p>
+              <p className="text-xs font-extrabold uppercase tracking-widest text-slate-500">
+                Receipt Preview
+              </p>
               <button
                 className="border border-slate-200 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-600 transition hover:bg-slate-50"
                 onClick={closeLabReceiptModal}
@@ -970,7 +1209,8 @@ export function BillingPage() {
                   Invoice created - {invoiceReceiptState.invoiceNumber}
                 </p>
                 <p className="text-xs text-emerald-700">
-                  {formatCurrency(invoiceReceiptState.total)} ({invoiceReceiptState.paymentMethod.toUpperCase()})
+                  {formatCurrency(invoiceReceiptState.total)} (
+                  {invoiceReceiptState.paymentMethod.toUpperCase()})
                 </p>
               </div>
             </div>
@@ -991,30 +1231,52 @@ export function BillingPage() {
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="whitespace-nowrap px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Invoice</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Patient</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Status</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Total</th>
-                  <th className="whitespace-nowrap px-4 py-2.5 text-right text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">Actions</th>
+                  <th className="whitespace-nowrap px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    Invoice
+                  </th>
+                  <th className="whitespace-nowrap px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    Patient
+                  </th>
+                  <th className="whitespace-nowrap px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    Status
+                  </th>
+                  <th className="whitespace-nowrap px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    Total
+                  </th>
+                  <th className="whitespace-nowrap px-4 py-2.5 text-right text-[10px] font-extrabold uppercase tracking-[0.14em] text-slate-500">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredInvoices.length === 0 ? (
                   <tr>
-                    <td className="px-6 py-12 text-center text-sm text-slate-400" colSpan={5}>
+                    <td
+                      className="px-6 py-12 text-center text-sm text-slate-400"
+                      colSpan={5}
+                    >
                       No invoices created yet.
                     </td>
                   </tr>
                 ) : (
                   paginatedInvoices.map((invoice) => {
-                    const patient = patients.find((item) => item.id === invoice.patientId);
+                    const patient = patients.find(
+                      (item) => item.id === invoice.patientId,
+                    );
 
                     return (
-                      <tr className="transition-colors hover:bg-slate-50" key={invoice.id}>
+                      <tr
+                        className="transition-colors hover:bg-slate-50"
+                        key={invoice.id}
+                      >
                         <td className="px-4 py-3 align-top">
                           <div className="space-y-0.5">
-                            <p className="font-bold text-slate-950">{invoice.invoiceNumber}</p>
-                            <p className="font-mono text-xs text-slate-400">{invoice.id}</p>
+                            <p className="font-bold text-slate-950">
+                              {invoice.invoiceNumber}
+                            </p>
+                            <p className="font-mono text-xs text-slate-400">
+                              {invoice.id}
+                            </p>
                           </div>
                         </td>
                         <td className="px-4 py-3 align-top text-sm text-slate-700">
@@ -1023,24 +1285,46 @@ export function BillingPage() {
                         <td className="px-4 py-3 align-top">
                           <PaymentBadge status={invoice.paymentStatus} />
                         </td>
-                        <td className="px-4 py-3 align-top text-sm font-bold tabular-nums text-slate-950">{formatCurrency(invoice.total)}</td>
+                        <td className="px-4 py-3 align-top text-sm font-bold tabular-nums text-slate-950">
+                          {formatCurrency(invoice.total)}
+                        </td>
                         <td className="px-4 py-3 align-top">
                           <div className="flex min-w-max items-center justify-end gap-3 whitespace-nowrap text-xs font-extrabold uppercase tracking-widest">
-                            {invoice.paymentStatus === 'unpaid' ? (
-                              <button className="inline-flex items-center gap-1 text-blue-600 hover:underline" onClick={() => openPaymentUpdateModal(invoice.id)} type="button">
+                            {invoice.paymentStatus === "unpaid" ? (
+                              <button
+                                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                                onClick={() =>
+                                  openPaymentUpdateModal(invoice.id)
+                                }
+                                type="button"
+                              >
                                 <CreditCard className="size-3.5" />
                                 Mark as Paid
                               </button>
                             ) : null}
-                            <button className="inline-flex items-center gap-1 text-emerald-700 hover:underline" onClick={() => openViewModal(invoice.id)} type="button">
+                            <button
+                              className="inline-flex items-center gap-1 text-emerald-700 hover:underline"
+                              onClick={() => openViewModal(invoice.id)}
+                              type="button"
+                            >
                               <Eye className="size-3.5" />
                               View
                             </button>
-                            <button className="inline-flex items-center gap-1 text-slate-600 hover:underline" onClick={() => openEditModal(invoice.id)} type="button">
+                            <button
+                              className="inline-flex items-center gap-1 text-slate-600 hover:underline"
+                              onClick={() => openEditModal(invoice.id)}
+                              type="button"
+                            >
                               <Pencil className="size-3.5" />
                               Edit
                             </button>
-                            <button className="inline-flex items-center gap-1 text-rose-600 hover:underline" onClick={() => void handleDeleteInvoice(invoice.id)} type="button">
+                            <button
+                              className="inline-flex items-center gap-1 text-rose-600 hover:underline"
+                              onClick={() =>
+                                void handleDeleteInvoice(invoice.id)
+                              }
+                              type="button"
+                            >
                               <Trash2 className="size-3.5" />
                               Delete
                             </button>
@@ -1056,13 +1340,16 @@ export function BillingPage() {
           {filteredInvoices.length > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-6 py-3">
               <p className="text-xs font-semibold text-slate-500">
-                Showing {showingStart}-{showingEnd} of {filteredInvoices.length} invoices
+                Showing {showingStart}-{showingEnd} of {filteredInvoices.length}{" "}
+                invoices
               </p>
               <div className="flex items-center gap-2">
                 <Button
                   className="rounded-none px-3 py-1 text-xs font-bold uppercase tracking-wide"
                   disabled={safeCurrentPage <= 1}
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  onClick={() =>
+                    setCurrentPage((page) => Math.max(1, page - 1))
+                  }
                   type="button"
                   variant="secondary"
                 >
@@ -1074,7 +1361,9 @@ export function BillingPage() {
                 <Button
                   className="rounded-none px-3 py-1 text-xs font-bold uppercase tracking-wide"
                   disabled={safeCurrentPage >= totalPages}
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  onClick={() =>
+                    setCurrentPage((page) => Math.min(totalPages, page + 1))
+                  }
                   type="button"
                   variant="secondary"
                 >
@@ -1099,9 +1388,15 @@ export function BillingPage() {
           >
             <div className="flex items-start justify-between gap-4 bg-emerald-600 px-4 py-4 sm:px-6">
               <div className="min-w-0">
-                <p className="text-xs font-extrabold uppercase tracking-widest text-emerald-100">Invoice Form</p>
-                <p className="mt-0.5 text-sm font-bold text-white">{editingInvoiceId ? 'Edit Invoice' : 'Create Invoice'}</p>
-                <p className="mt-2 max-w-2xl text-sm text-emerald-50">Create or update billing entries from this modal form.</p>
+                <p className="text-xs font-extrabold uppercase tracking-widest text-emerald-100">
+                  Invoice Form
+                </p>
+                <p className="mt-0.5 text-sm font-bold text-white">
+                  {editingInvoiceId ? "Edit Invoice" : "Create Invoice"}
+                </p>
+                <p className="mt-2 max-w-2xl text-sm text-emerald-50">
+                  Create or update billing entries from this modal form.
+                </p>
               </div>
               <button
                 aria-label="Close invoice modal"
@@ -1116,13 +1411,21 @@ export function BillingPage() {
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={onSubmit}>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="space-y-4 px-4 py-5 sm:px-6">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Patient</p>
-                  <FormField error={form.formState.errors.patientId?.message} label="Select patient">
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                    Patient
+                  </p>
+                  <FormField
+                    error={form.formState.errors.patientId?.message}
+                    label="Select patient"
+                  >
                     <div className="relative">
-                      <input type="hidden" {...form.register('patientId')} />
+                      <input type="hidden" {...form.register("patientId")} />
                       <Input
                         onBlur={() => {
-                          window.setTimeout(() => setIsInvoicePatientDropdownOpen(false), 120);
+                          window.setTimeout(
+                            () => setIsInvoicePatientDropdownOpen(false),
+                            120,
+                          );
                         }}
                         onFocus={() => setIsInvoicePatientDropdownOpen(true)}
                         onChange={(event) => {
@@ -1132,13 +1435,21 @@ export function BillingPage() {
 
                           const exactMatch = patients.find(
                             (patient) =>
-                              `${patient.firstName} ${patient.lastName}`.trim().toLowerCase() === query.trim().toLowerCase(),
+                              `${patient.firstName} ${patient.lastName}`
+                                .trim()
+                                .toLowerCase() === query.trim().toLowerCase(),
                           );
                           if (exactMatch) {
-                            form.setValue('patientId', exactMatch.id, { shouldDirty: true, shouldValidate: true });
+                            form.setValue("patientId", exactMatch.id, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            });
                             return;
                           }
-                          form.setValue('patientId', '', { shouldDirty: true, shouldValidate: true });
+                          form.setValue("patientId", "", {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
                         }}
                         placeholder="Type patient name"
                         value={invoicePatientSearch}
@@ -1146,41 +1457,63 @@ export function BillingPage() {
                       {isInvoicePatientDropdownOpen ? (
                         <div className="absolute z-20 mt-1 max-h-52 w-full overflow-y-auto border border-slate-200 bg-white shadow-lg">
                           {filteredInvoicePatients.length > 0 ? (
-                            filteredInvoicePatients.slice(0, 20).map((patient) => (
-                              <button
-                                className={`block w-full px-3 py-2 text-left text-sm transition hover:bg-slate-50 ${
-                                  selectedPatientId === patient.id ? 'bg-emerald-50 text-emerald-800' : 'text-slate-700'
-                                }`}
-                                key={patient.id}
-                                onMouseDown={() => selectInvoicePatient(patient)}
-                                type="button"
-                              >
-                                {patient.firstName} {patient.lastName}
-                              </button>
-                            ))
+                            filteredInvoicePatients
+                              .slice(0, 20)
+                              .map((patient) => (
+                                <button
+                                  className={`block w-full px-3 py-2 text-left text-sm transition hover:bg-slate-50 ${
+                                    selectedPatientId === patient.id
+                                      ? "bg-emerald-50 text-emerald-800"
+                                      : "text-slate-700"
+                                  }`}
+                                  key={patient.id}
+                                  onPointerDown={(event) => {
+                                    event.preventDefault();
+                                    selectInvoicePatient(patient);
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (
+                                      event.key === "Enter" ||
+                                      event.key === " "
+                                    ) {
+                                      event.preventDefault();
+                                      selectInvoicePatient(patient);
+                                    }
+                                  }}
+                                  type="button"
+                                >
+                                  {patient.firstName} {patient.lastName}
+                                </button>
+                              ))
                           ) : (
-                            <p className="px-3 py-2 text-xs text-slate-500">No matching patients found.</p>
+                            <p className="px-3 py-2 text-xs text-slate-500">
+                              No matching patients found.
+                            </p>
                           )}
                         </div>
                       ) : null}
                       {selectedPatient ? (
                         <p className="mt-1 text-xs text-slate-500">
-                          Selected: {selectedPatient.firstName} {selectedPatient.lastName}
+                          Selected: {selectedPatient.firstName}{" "}
+                          {selectedPatient.lastName}
                         </p>
                       ) : null}
                     </div>
                   </FormField>
                   <FormField label="Tag from booking">
                     <Select
-                      {...form.register('bookingId')}
+                      {...form.register("bookingId")}
                       onChange={(event) => {
-                        const booking = bookings.find((item) => item.id === event.target.value) ?? null;
-                        form.setValue('bookingId', event.target.value);
+                        const booking =
+                          bookings.find(
+                            (item) => item.id === event.target.value,
+                          ) ?? null;
+                        form.setValue("bookingId", event.target.value);
                         if (!booking) {
-                          form.setValue('items', [
+                          form.setValue("items", [
                             {
-                              description: 'General Consultation',
-                              category: 'consultation',
+                              description: "General Consultation",
+                              category: "consultation",
                               quantity: 1,
                               unitPrice: 800,
                             },
@@ -1188,15 +1521,26 @@ export function BillingPage() {
                           return;
                         }
 
-                        form.setValue('patientId', booking.patientId, { shouldDirty: true, shouldValidate: true });
-                        const bookingPatient = patients.find((patient) => patient.id === booking.patientId) ?? null;
+                        form.setValue("patientId", booking.patientId, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                        const bookingPatient =
+                          patients.find(
+                            (patient) => patient.id === booking.patientId,
+                          ) ?? null;
                         if (bookingPatient) {
-                          setInvoicePatientSearch(`${bookingPatient.firstName} ${bookingPatient.lastName}`);
+                          setInvoicePatientSearch(
+                            `${bookingPatient.firstName} ${bookingPatient.lastName}`,
+                          );
                         }
-                        form.setValue('items', [
+                        form.setValue("items", [
                           {
-                            description: booking.feeType === 'follow_up' ? 'Follow-up Consultation' : 'Consultation Fee',
-                            category: 'consultation',
+                            description:
+                              booking.feeType === "follow_up"
+                                ? "Follow-up Consultation"
+                                : "Consultation Fee",
+                            category: "consultation",
                             quantity: 1,
                             unitPrice: booking.feeAmount,
                           },
@@ -1205,27 +1549,54 @@ export function BillingPage() {
                     >
                       <option value="">Manual entry</option>
                       {bookings.map((booking) => {
-                        const patient = patients.find((item) => item.id === booking.patientId);
+                        const patient = patients.find(
+                          (item) => item.id === booking.patientId,
+                        );
                         return (
                           <option key={booking.id} value={booking.id}>
-                            {patient?.firstName} {patient?.lastName} - {booking.feeType === 'follow_up' ? 'Follow-up' : 'Consultation'}
+                            {patient?.firstName} {patient?.lastName} -{" "}
+                            {booking.feeType === "follow_up"
+                              ? "Follow-up"
+                              : "Consultation"}
                           </option>
                         );
                       })}
                     </Select>
                   </FormField>
-                  {selectedBooking ? <p className="text-xs text-slate-500">Tagged booking amount: {formatCurrency(selectedBooking.feeAmount)}</p> : null}
-                  
+                  {selectedBooking ? (
+                    <p className="text-xs text-slate-500">
+                      Tagged booking amount:{" "}
+                      {formatCurrency(selectedBooking.feeAmount)}
+                    </p>
+                  ) : null}
+
                   <FormField label="Link to appointment (optional but recommended)">
-                    <Select {...form.register('appointmentId')}>
+                    <Select {...form.register("appointmentId")}>
                       <option value="">Select an appointment</option>
                       {appointments
-                        .filter((appt) => appt.patientId === form.watch('patientId'))
-                        .filter((appt) => !['cancelled', 'completed', 'no_show'].includes(appt.status))
-                        .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime())
+                        .filter(
+                          (appt) => appt.patientId === form.watch("patientId"),
+                        )
+                        .filter(
+                          (appt) =>
+                            !["cancelled", "completed", "no_show"].includes(
+                              appt.status,
+                            ),
+                        )
+                        .sort(
+                          (a, b) =>
+                            new Date(b.scheduledAt).getTime() -
+                            new Date(a.scheduledAt).getTime(),
+                        )
                         .map((appointment) => {
                           const date = new Date(appointment.scheduledAt);
-                          const formatted = date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                          const formatted = date.toLocaleDateString("en-PH", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          });
                           return (
                             <option key={appointment.id} value={appointment.id}>
                               {formatted} - {appointment.status}
@@ -1234,15 +1605,25 @@ export function BillingPage() {
                         })}
                     </Select>
                   </FormField>
-                  <p className="text-xs text-slate-500">Linking to an appointment ensures payment verification is tied to the specific session, preventing old invoices from authorizing access.</p>
+                  <p className="text-xs text-slate-500">
+                    Linking to an appointment ensures payment verification is
+                    tied to the specific session, preventing old invoices from
+                    authorizing access.
+                  </p>
                 </div>
 
                 {selectedPatientId && totalUnbilledCount > 0 ? (
                   <div className="space-y-4 border-t border-slate-100 px-4 py-5 sm:px-6 bg-amber-50/50">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-[10px] font-extrabold uppercase tracking-widest text-amber-800">Unbilled Items Detected</p>
-                        <p className="text-xs text-amber-700">The patient has completed consultations, laboratory orders, or inventory items that haven't been added to this invoice yet.</p>
+                        <p className="text-[10px] font-extrabold uppercase tracking-widest text-amber-800">
+                          Unbilled Items Detected
+                        </p>
+                        <p className="text-xs text-amber-700">
+                          The patient has completed consultations, laboratory
+                          orders, or inventory items that haven't been added to
+                          this invoice yet.
+                        </p>
                       </div>
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
                         {totalUnbilledCount} items
@@ -1251,10 +1632,18 @@ export function BillingPage() {
 
                     <div className="space-y-2.5 max-h-48 overflow-y-auto">
                       {unbilledConsultations.map((c) => (
-                        <div key={c.id} className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-2.5 shadow-sm text-xs">
+                        <div
+                          key={c.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-2.5 shadow-sm text-xs"
+                        >
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-900 truncate">Consultation Fee ({c.consultationType})</p>
-                            <p className="text-[10px] text-slate-500">Dr. {c.providerName || 'Staff'} • {c.consultationDate}</p>
+                            <p className="font-semibold text-slate-900 truncate">
+                              Consultation Fee ({c.consultationType})
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              Dr. {c.providerName || "Staff"} •{" "}
+                              {c.consultationDate}
+                            </p>
                           </div>
                           <Button
                             onClick={() => importConsultation(c)}
@@ -1267,10 +1656,18 @@ export function BillingPage() {
                       ))}
 
                       {unbilledLabRequests.map((req) => (
-                        <div key={req.id} className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-2.5 shadow-sm text-xs">
+                        <div
+                          key={req.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-2.5 shadow-sm text-xs"
+                        >
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-900 truncate">Laboratory Order: {req.serviceName}</p>
-                            <p className="text-[10px] text-slate-500">Status: {req.status} • {new Date(req.createdAt).toLocaleDateString()}</p>
+                            <p className="font-semibold text-slate-900 truncate">
+                              Laboratory Order: {req.serviceName}
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              Status: {req.status} •{" "}
+                              {new Date(req.createdAt).toLocaleDateString()}
+                            </p>
                           </div>
                           <Button
                             onClick={() => importLabRequest(req)}
@@ -1283,10 +1680,18 @@ export function BillingPage() {
                       ))}
 
                       {unbilledInventoryLogs.map((log) => (
-                        <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-2.5 shadow-sm text-xs">
+                        <div
+                          key={log.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white p-2.5 shadow-sm text-xs"
+                        >
                           <div className="min-w-0">
-                            <p className="font-semibold text-slate-900 truncate">Medical Supplies: {log.itemId}</p>
-                            <p className="text-[10px] text-slate-500">Qty: {log.quantity} • Scanned: {log.scannedCode || 'N/A'}</p>
+                            <p className="font-semibold text-slate-900 truncate">
+                              Medical Supplies: {log.itemId}
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              Qty: {log.quantity} • Scanned:{" "}
+                              {log.scannedCode || "N/A"}
+                            </p>
                           </div>
                           <Button
                             onClick={() => importInventoryLog(log)}
@@ -1302,28 +1707,39 @@ export function BillingPage() {
                 ) : null}
 
                 <div className="space-y-4 border-t border-slate-100 px-4 py-5 sm:px-6">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Payment</p>
-                  <FormField error={form.formState.errors.paymentStatus?.message} label="Payment Status">
-                    <Select {...form.register('paymentStatus')}>
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                    Payment
+                  </p>
+                  <FormField
+                    error={form.formState.errors.paymentStatus?.message}
+                    label="Payment Status"
+                  >
+                    <Select {...form.register("paymentStatus")}>
                       <option value="unpaid">Unpaid</option>
                       <option value="paid">Paid</option>
                     </Select>
                   </FormField>
 
-                  {selectedInvoicePaymentStatus === 'paid' ? (
+                  {selectedInvoicePaymentStatus === "paid" ? (
                     <div className="grid gap-4 md:grid-cols-2">
-                      <FormField error={form.formState.errors.paymentType?.message} label="Payment Type">
-                        <Select {...form.register('paymentType')}>
+                      <FormField
+                        error={form.formState.errors.paymentType?.message}
+                        label="Payment Type"
+                      >
+                        <Select {...form.register("paymentType")}>
                           <option value="cash">Cash</option>
                           <option value="gcash">GCash</option>
                           <option value="card">Card</option>
                         </Select>
                       </FormField>
-                      {selectedInvoicePaymentType !== 'cash' ? (
-                        <FormField error={form.formState.errors.referenceNumber?.message} label="Reference Number">
+                      {selectedInvoicePaymentType !== "cash" ? (
+                        <FormField
+                          error={form.formState.errors.referenceNumber?.message}
+                          label="Reference Number"
+                        >
                           <Input
                             placeholder="Enter reference number"
-                            {...form.register('referenceNumber')}
+                            {...form.register("referenceNumber")}
                           />
                         </FormField>
                       ) : null}
@@ -1334,15 +1750,20 @@ export function BillingPage() {
                 <div className="space-y-4 border-t border-slate-100 px-4 py-5 sm:px-6">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Line items</p>
-                      <p className="text-sm text-slate-500">Add one or more billing entries to match the printed invoice layout.</p>
+                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                        Line items
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        Add one or more billing entries to match the printed
+                        invoice layout.
+                      </p>
                     </div>
                     <Button
                       className="rounded-none border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-700 hover:bg-slate-100"
                       onClick={() =>
                         itemsFieldArray.append({
-                          description: 'New service',
-                          category: 'other',
+                          description: "New service",
+                          category: "other",
                           quantity: 1,
                           unitPrice: 0,
                         })
@@ -1355,11 +1776,26 @@ export function BillingPage() {
                   </div>
 
                   {itemsFieldArray.fields.map((field, index) => (
-                    <div key={field.id} className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <input type="hidden" {...form.register(`items.${index}.referenceId` as const)} />
-                      <input type="hidden" {...form.register(`items.${index}.referenceType` as const)} />
+                    <div
+                      key={field.id}
+                      className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <input
+                        type="hidden"
+                        {...form.register(
+                          `items.${index}.referenceId` as const,
+                        )}
+                      />
+                      <input
+                        type="hidden"
+                        {...form.register(
+                          `items.${index}.referenceType` as const,
+                        )}
+                      />
                       <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-semibold text-slate-900">Item {index + 1}</p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          Item {index + 1}
+                        </p>
                         {itemsFieldArray.fields.length > 1 ? (
                           <button
                             className="text-xs font-semibold uppercase tracking-widest text-rose-600 hover:text-rose-700"
@@ -1372,39 +1808,89 @@ export function BillingPage() {
                       </div>
                       <div className="grid gap-4 md:grid-cols-4">
                         <FormField
-                          error={form.formState.errors.items?.[index]?.description?.message}
+                          error={
+                            form.formState.errors.items?.[index]?.description
+                              ?.message
+                          }
                           label="Description"
                         >
-                          <Input {...form.register(`items.${index}.description` as const)} />
+                          <Input
+                            {...form.register(
+                              `items.${index}.description` as const,
+                            )}
+                          />
                         </FormField>
-                        <FormField error={form.formState.errors.items?.[index]?.category?.message} label="Category">
-                          <Select {...form.register(`items.${index}.category` as const)}>
+                        <FormField
+                          error={
+                            form.formState.errors.items?.[index]?.category
+                              ?.message
+                          }
+                          label="Category"
+                        >
+                          <Select
+                            {...form.register(
+                              `items.${index}.category` as const,
+                            )}
+                          >
                             <option value="consultation">Consultation</option>
                             <option value="laboratory">Laboratory</option>
                             <option value="medicine">Medicine</option>
                             <option value="other">Other</option>
                           </Select>
                         </FormField>
-                        <FormField error={form.formState.errors.items?.[index]?.quantity?.message} label="Qty">
-                          <Input type="number" {...form.register(`items.${index}.quantity` as const, { valueAsNumber: true })} />
+                        <FormField
+                          error={
+                            form.formState.errors.items?.[index]?.quantity
+                              ?.message
+                          }
+                          label="Qty"
+                        >
+                          <Input
+                            type="number"
+                            {...form.register(
+                              `items.${index}.quantity` as const,
+                              { valueAsNumber: true },
+                            )}
+                          />
                         </FormField>
-                        <FormField error={form.formState.errors.items?.[index]?.unitPrice?.message} label="Unit price">
-                          <Input type="number" {...form.register(`items.${index}.unitPrice` as const, { valueAsNumber: true })} />
+                        <FormField
+                          error={
+                            form.formState.errors.items?.[index]?.unitPrice
+                              ?.message
+                          }
+                          label="Unit price"
+                        >
+                          <Input
+                            type="number"
+                            {...form.register(
+                              `items.${index}.unitPrice` as const,
+                              { valueAsNumber: true },
+                            )}
+                          />
                         </FormField>
                       </div>
                       <p className="text-sm font-semibold text-slate-700">
-                        Amount: {formatCurrency((form.getValues(`items.${index}.quantity`) ?? 0) * (form.getValues(`items.${index}.unitPrice`) ?? 0))}
+                        Amount:{" "}
+                        {formatCurrency(
+                          (form.getValues(`items.${index}.quantity`) ?? 0) *
+                            (form.getValues(`items.${index}.unitPrice`) ?? 0),
+                        )}
                       </p>
                     </div>
                   ))}
                 </div>
 
                 <div className="space-y-4 border-t border-slate-100 px-4 py-5 sm:px-6 bg-slate-50/70">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Invoice Summary</p>
-                  
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                    Invoice Summary
+                  </p>
+
                   <div className="grid gap-4 md:grid-cols-3">
-                    <FormField error={form.formState.errors.discountType?.message} label="Discount Type">
-                      <Select {...form.register('discountType')}>
+                    <FormField
+                      error={form.formState.errors.discountType?.message}
+                      label="Discount Type"
+                    >
+                      <Select {...form.register("discountType")}>
                         <option value="none">None</option>
                         <option value="senior">Senior Citizen (20%)</option>
                         <option value="pwd">PWD (20%)</option>
@@ -1413,18 +1899,30 @@ export function BillingPage() {
                       </Select>
                     </FormField>
 
-                    <FormField error={form.formState.errors.discountAmount?.message} label="Discount Amount (PHP)">
+                    <FormField
+                      error={form.formState.errors.discountAmount?.message}
+                      label="Discount Amount (PHP)"
+                    >
                       <Input
                         type="number"
-                        disabled={discountType === 'none' || discountType === 'senior' || discountType === 'pwd'}
-                        {...form.register('discountAmount', { valueAsNumber: true })}
+                        disabled={
+                          discountType === "none" ||
+                          discountType === "senior" ||
+                          discountType === "pwd"
+                        }
+                        {...form.register("discountAmount", {
+                          valueAsNumber: true,
+                        })}
                       />
                     </FormField>
 
-                    <FormField error={form.formState.errors.taxAmount?.message} label="Tax Amount (PHP)">
+                    <FormField
+                      error={form.formState.errors.taxAmount?.message}
+                      label="Tax Amount (PHP)"
+                    >
                       <Input
                         type="number"
-                        {...form.register('taxAmount', { valueAsNumber: true })}
+                        {...form.register("taxAmount", { valueAsNumber: true })}
                       />
                     </FormField>
                   </div>
@@ -1432,42 +1930,59 @@ export function BillingPage() {
                   <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-2">
                     <div className="flex justify-between text-sm text-slate-600">
                       <span>Subtotal</span>
-                      <span className="font-semibold text-slate-900">{formatCurrency(subtotal)}</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatCurrency(subtotal)}
+                      </span>
                     </div>
                     {discountAmount > 0 ? (
                       <div className="flex justify-between text-sm text-rose-600">
                         <span>Discount ({discountType.toUpperCase()})</span>
-                        <span className="font-semibold">- {formatCurrency(discountAmount)}</span>
+                        <span className="font-semibold">
+                          - {formatCurrency(discountAmount)}
+                        </span>
                       </div>
                     ) : null}
                     {taxAmount > 0 ? (
                       <div className="flex justify-between text-sm text-slate-600">
                         <span>Tax / VAT</span>
-                        <span className="font-semibold">{formatCurrency(taxAmount)}</span>
+                        <span className="font-semibold">
+                          {formatCurrency(taxAmount)}
+                        </span>
                       </div>
                     ) : null}
                     <div className="border-t border-slate-100 pt-2 flex justify-between text-base font-extrabold text-slate-900">
                       <span>Total Amount Due</span>
-                      <span className="text-emerald-600">{formatCurrency(Math.max(0, subtotal - discountAmount))}</span>
+                      <span className="text-emerald-600">
+                        {formatCurrency(Math.max(0, subtotal - discountAmount))}
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
-                <Button className="w-full rounded-none sm:w-auto" onClick={closeInvoiceModal} type="button" variant="secondary">
+                <Button
+                  className="w-full rounded-none sm:w-auto"
+                  onClick={closeInvoiceModal}
+                  type="button"
+                  variant="secondary"
+                >
                   Cancel
                 </Button>
                 <Button
                   className="w-full rounded-none bg-emerald-600 px-5 py-3 text-sm font-extrabold uppercase tracking-widest hover:bg-emerald-700 sm:w-auto"
-                  disabled={createInvoiceMutation.isPending || updateInvoiceMutation.isPending}
+                  disabled={
+                    createInvoiceMutation.isPending ||
+                    updateInvoiceMutation.isPending
+                  }
                   type="submit"
                 >
-                  {createInvoiceMutation.isPending || updateInvoiceMutation.isPending
-                    ? 'Saving...'
+                  {createInvoiceMutation.isPending ||
+                  updateInvoiceMutation.isPending
+                    ? "Saving..."
                     : editingInvoiceId
-                      ? 'Save Invoice'
-                      : 'Create Invoice'}
+                      ? "Save Invoice"
+                      : "Create Invoice"}
                 </Button>
               </div>
             </form>
@@ -1488,9 +2003,17 @@ export function BillingPage() {
           >
             <div className="flex items-start justify-between gap-4 bg-violet-700 px-4 py-4 sm:px-6">
               <div className="min-w-0">
-                <p className="text-xs font-extrabold uppercase tracking-widest text-violet-200">Paid Lab Service</p>
-                <p className="mt-0.5 text-sm font-bold text-white">Pay for service</p>
-                <p className="mt-2 max-w-2xl text-sm text-violet-50">Choose a patient and laboratory service. The system will use the live service fee, create the paid invoice, generate the lab request, and prepare a QR receipt.</p>
+                <p className="text-xs font-extrabold uppercase tracking-widest text-violet-200">
+                  Paid Lab Service
+                </p>
+                <p className="mt-0.5 text-sm font-bold text-white">
+                  Pay for service
+                </p>
+                <p className="mt-2 max-w-2xl text-sm text-violet-50">
+                  Choose a patient and laboratory service. The system will use
+                  the live service fee, create the paid invoice, generate the
+                  lab request, and prepare a QR receipt.
+                </p>
               </div>
               <button
                 aria-label="Close paid service modal"
@@ -1502,12 +2025,20 @@ export function BillingPage() {
               </button>
             </div>
 
-            <form className="flex min-h-0 flex-1 flex-col" onSubmit={onSubmitPaidService}>
+            <form
+              className="flex min-h-0 flex-1 flex-col"
+              onSubmit={onSubmitPaidService}
+            >
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <div className="space-y-4 px-4 py-5 sm:px-6">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Patient</p>
-                  <FormField error={payServiceForm.formState.errors.patientId?.message} label="Select patient">
-                    <Select {...payServiceForm.register('patientId')}>
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                    Patient
+                  </p>
+                  <FormField
+                    error={payServiceForm.formState.errors.patientId?.message}
+                    label="Select patient"
+                  >
+                    <Select {...payServiceForm.register("patientId")}>
                       {patients.map((patient) => (
                         <option key={patient.id} value={patient.id}>
                           {patient.firstName} {patient.lastName}
@@ -1518,9 +2049,17 @@ export function BillingPage() {
                 </div>
 
                 <div className="space-y-4 border-t border-slate-100 px-4 py-5 sm:px-6">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Laboratory Service</p>
-                  <FormField error={payServiceForm.formState.errors.serviceId?.message} label="Lab service">
-                    <Select {...payServiceForm.register('serviceId')} disabled={labServiceOptions.length === 0}>
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                    Laboratory Service
+                  </p>
+                  <FormField
+                    error={payServiceForm.formState.errors.serviceId?.message}
+                    label="Lab service"
+                  >
+                    <Select
+                      {...payServiceForm.register("serviceId")}
+                      disabled={labServiceOptions.length === 0}
+                    >
                       <option value="">Select a laboratory service</option>
                       {labServiceOptions.map((service: any) => (
                         <option key={service.id} value={service.id}>
@@ -1532,46 +2071,76 @@ export function BillingPage() {
 
                   {selectedLabService ? (
                     <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 text-sm text-slate-700">
-                      <p className="font-semibold text-slate-950">{selectedLabService.name}</p>
-                      <p className="mt-1">{selectedLabService.description ?? 'No service description available.'}</p>
+                      <p className="font-semibold text-slate-950">
+                        {selectedLabService.name}
+                      </p>
+                      <p className="mt-1">
+                        {selectedLabService.description ??
+                          "No service description available."}
+                      </p>
                       <div className="mt-4 grid gap-3 md:grid-cols-2">
                         <div>
-                          <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Category</p>
-                          <p className="mt-1 font-semibold text-slate-950">{selectedLabService.category}</p>
+                          <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                            Category
+                          </p>
+                          <p className="mt-1 font-semibold text-slate-950">
+                            {selectedLabService.category}
+                          </p>
                         </div>
                         <div>
-                          <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Declared fee</p>
-                          <p className="mt-1 font-semibold text-violet-800">{formatCurrency(selectedLabService.serviceFee)}</p>
+                          <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                            Declared fee
+                          </p>
+                          <p className="mt-1 font-semibold text-violet-800">
+                            {formatCurrency(selectedLabService.serviceFee)}
+                          </p>
                         </div>
                       </div>
                     </div>
                   ) : null}
 
-                  <FormField error={payServiceForm.formState.errors.notes?.message} label="Lab notes">
+                  <FormField
+                    error={payServiceForm.formState.errors.notes?.message}
+                    label="Lab notes"
+                  >
                     <Textarea
                       placeholder="Optional intake or cashier notes for the laboratory team"
                       rows={3}
-                      {...payServiceForm.register('notes')}
+                      {...payServiceForm.register("notes")}
                     />
                   </FormField>
 
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                    <input className="accent-violet-700" type="checkbox" {...payServiceForm.register('urgentFlag')} />
+                    <input
+                      className="accent-violet-700"
+                      type="checkbox"
+                      {...payServiceForm.register("urgentFlag")}
+                    />
                     Mark as urgent
                   </label>
                 </div>
               </div>
 
               <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
-                <Button className="w-full rounded-none sm:w-auto" onClick={closePayForServiceModal} type="button" variant="secondary">
+                <Button
+                  className="w-full rounded-none sm:w-auto"
+                  onClick={closePayForServiceModal}
+                  type="button"
+                  variant="secondary"
+                >
                   Cancel
                 </Button>
                 <Button
                   className="w-full rounded-none bg-violet-700 px-5 py-3 text-sm font-extrabold uppercase tracking-widest hover:bg-violet-800 sm:w-auto"
-                  disabled={payForServiceMutation.isPending || labServiceOptions.length === 0}
+                  disabled={
+                    payForServiceMutation.isPending ||
+                    labServiceOptions.length === 0
+                  }
                   type="submit"
                 >
-                  {payForServiceMutation.isPending ? 'Processing payment...' : 'Pay and print receipt'}
+                  {payForServiceMutation.isPending
+                    ? "Processing payment..."
+                    : "Pay and print receipt"}
                 </Button>
               </div>
             </form>
@@ -1592,9 +2161,16 @@ export function BillingPage() {
           >
             <div className="flex items-start justify-between gap-4 bg-slate-900 px-4 py-4 sm:px-6">
               <div className="min-w-0">
-                <p className="text-xs font-extrabold uppercase tracking-widest text-slate-300">Invoice Details</p>
-                <p className="mt-0.5 text-sm font-bold text-white">{viewedInvoice.invoiceNumber}</p>
-                <p className="mt-2 max-w-2xl text-sm text-slate-300">Review the invoice record, linked patient, line item, and totals from billing.</p>
+                <p className="text-xs font-extrabold uppercase tracking-widest text-slate-300">
+                  Invoice Details
+                </p>
+                <p className="mt-0.5 text-sm font-bold text-white">
+                  {viewedInvoice.invoiceNumber}
+                </p>
+                <p className="mt-2 max-w-2xl text-sm text-slate-300">
+                  Review the invoice record, linked patient, line item, and
+                  totals from billing.
+                </p>
               </div>
               <button
                 aria-label="Close invoice details modal"
@@ -1608,124 +2184,211 @@ export function BillingPage() {
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
               <div className="space-y-5">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Patient</p>
-                  <p className="mt-2 text-base font-bold text-slate-950">
-                    {viewedInvoicePatient ? `${viewedInvoicePatient.firstName} ${viewedInvoicePatient.lastName}` : 'Unknown patient'}
-                  </p>
-                  <p className="mt-1 text-sm text-slate-500">{viewedInvoicePatient?.email || viewedInvoicePatient?.mobileNumber || 'No contact info recorded'}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Payment Status</p>
-                  <div className="mt-2">
-                    <PaymentBadge status={viewedInvoice.paymentStatus} />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                      Patient
+                    </p>
+                    <p className="mt-2 text-base font-bold text-slate-950">
+                      {viewedInvoicePatient
+                        ? `${viewedInvoicePatient.firstName} ${viewedInvoicePatient.lastName}`
+                        : "Unknown patient"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {viewedInvoicePatient?.email ||
+                        viewedInvoicePatient?.mobileNumber ||
+                        "No contact info recorded"}
+                    </p>
                   </div>
-                  <p className="mt-3 text-sm text-slate-500">Created {new Date(viewedInvoice.createdAt).toLocaleString('en-PH')}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Invoice Id</p>
-                  <p className="mt-2 break-all font-mono text-sm font-semibold text-slate-950">{viewedInvoice.id}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Appointment Id</p>
-                  <p className="mt-2 break-all font-mono text-sm font-semibold text-slate-950">{viewedInvoice.appointmentId || 'Not linked'}</p>
-                </div>
-              </div>
-
-              {paymentsForViewedInvoice.length > 0 && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Payment Details</p>
-                  {paymentsForViewedInvoice.map((payment) => {
-                    const methodDisplayMap: Record<string, string> = {
-                      cash: 'Cash',
-                      gcash: 'GCash',
-                      bank_transfer: 'Bank Transfer',
-                      other: 'Other',
-                    };
-                    const displayMethod = methodDisplayMap[payment.method] || payment.method;
-
-                    return (
-                      <div key={payment.id} className="mt-3 grid gap-4 md:grid-cols-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Method</p>
-                          <p className="mt-1 font-semibold text-slate-950">{displayMethod}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Amount</p>
-                          <p className="mt-1 font-semibold text-slate-950">{formatCurrency(payment.amount)}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Reference Number</p>
-                          <p className="mt-1 font-semibold text-slate-950">{payment.referenceNumber || 'N/A'}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Line Items</p>
-                {viewedInvoiceItems.length > 5 ? (
-                  <p className="mt-1 text-xs text-slate-500">
-                    Showing {viewedInvoiceItems.length} items. Scroll inside this section to view all.
-                  </p>
-                ) : null}
-                {viewedInvoiceItems.length > 0 ? (
-                  <div className="mt-3 max-h-80 space-y-3 overflow-y-auto pr-1">
-                    {viewedInvoiceItems.map((item) => (
-                      <div key={item.id} className="grid gap-4 rounded-xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-5">
-                        <div className="md:col-span-2">
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Description</p>
-                          <p className="mt-1 font-semibold text-slate-950">{item.description}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Category</p>
-                          <p className="mt-1 font-semibold text-slate-950">{item.category}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Quantity</p>
-                          <p className="mt-1 font-semibold text-slate-950">{item.quantity}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Unit Price</p>
-                          <p className="mt-1 font-semibold text-slate-950">{formatCurrency(item.unitPrice)}</p>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                      Payment Status
+                    </p>
+                    <div className="mt-2">
+                      <PaymentBadge status={viewedInvoice.paymentStatus} />
+                    </div>
+                    <p className="mt-3 text-sm text-slate-500">
+                      Created{" "}
+                      {new Date(viewedInvoice.createdAt).toLocaleString(
+                        "en-PH",
+                      )}
+                    </p>
                   </div>
-                ) : (
-                  <p className="mt-3 text-sm text-slate-500">No invoice item was found for this record.</p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                      Invoice Id
+                    </p>
+                    <p className="mt-2 break-all font-mono text-sm font-semibold text-slate-950">
+                      {viewedInvoice.id}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                      Appointment Id
+                    </p>
+                    <p className="mt-2 break-all font-mono text-sm font-semibold text-slate-950">
+                      {viewedInvoice.appointmentId || "Not linked"}
+                    </p>
+                  </div>
+                </div>
+
+                {paymentsForViewedInvoice.length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                      Payment Details
+                    </p>
+                    {paymentsForViewedInvoice.map((payment) => {
+                      const methodDisplayMap: Record<string, string> = {
+                        cash: "Cash",
+                        gcash: "GCash",
+                        bank_transfer: "Bank Transfer",
+                        other: "Other",
+                      };
+                      const displayMethod =
+                        methodDisplayMap[payment.method] || payment.method;
+
+                      return (
+                        <div
+                          key={payment.id}
+                          className="mt-3 grid gap-4 md:grid-cols-3"
+                        >
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                              Method
+                            </p>
+                            <p className="mt-1 font-semibold text-slate-950">
+                              {displayMethod}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                              Amount
+                            </p>
+                            <p className="mt-1 font-semibold text-slate-950">
+                              {formatCurrency(payment.amount)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                              Reference Number
+                            </p>
+                            <p className="mt-1 font-semibold text-slate-950">
+                              {payment.referenceNumber || "N/A"}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">Subtotal</p>
-                  <p className="mt-2 text-lg font-extrabold text-emerald-950">{formatCurrency(viewedInvoice.subtotal)}</p>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                    Line Items
+                  </p>
+                  {viewedInvoiceItems.length > 5 ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Showing {viewedInvoiceItems.length} items. Scroll inside
+                      this section to view all.
+                    </p>
+                  ) : null}
+                  {viewedInvoiceItems.length > 0 ? (
+                    <div className="mt-3 max-h-80 space-y-3 overflow-y-auto pr-1">
+                      {viewedInvoiceItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="grid gap-4 rounded-xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-5"
+                        >
+                          <div className="md:col-span-2">
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                              Description
+                            </p>
+                            <p className="mt-1 font-semibold text-slate-950">
+                              {item.description}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                              Category
+                            </p>
+                            <p className="mt-1 font-semibold text-slate-950">
+                              {item.category}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                              Quantity
+                            </p>
+                            <p className="mt-1 font-semibold text-slate-950">
+                              {item.quantity}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                              Unit Price
+                            </p>
+                            <p className="mt-1 font-semibold text-slate-950">
+                              {formatCurrency(item.unitPrice)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-500">
+                      No invoice item was found for this record.
+                    </p>
+                  )}
                 </div>
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">Total</p>
-                  <p className="mt-2 text-lg font-extrabold text-emerald-950">{formatCurrency(viewedInvoice.total)}</p>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">
+                      Subtotal
+                    </p>
+                    <p className="mt-2 text-lg font-extrabold text-emerald-950">
+                      {formatCurrency(viewedInvoice.subtotal)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">
+                      Total
+                    </p>
+                    <p className="mt-2 text-lg font-extrabold text-emerald-950">
+                      {formatCurrency(viewedInvoice.total)}
+                    </p>
+                  </div>
                 </div>
-              </div>
               </div>
             </div>
 
             <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-4 py-4 sm:flex-row sm:justify-end sm:px-6">
-              <Button className="gap-2 rounded-none sm:w-auto" onClick={handleSaveViewedInvoiceAsPdf} type="button" variant="secondary">
+              <Button
+                className="gap-2 rounded-none sm:w-auto"
+                onClick={handleSaveViewedInvoiceAsPdf}
+                type="button"
+                variant="secondary"
+              >
                 <Receipt className="size-4" />
                 Save as PDF
               </Button>
-              <Button className="gap-2 rounded-none sm:w-auto" onClick={handlePrintViewedInvoice} type="button">
+              <Button
+                className="gap-2 rounded-none sm:w-auto"
+                onClick={handlePrintViewedInvoice}
+                type="button"
+              >
                 <Printer className="size-4" />
                 Print receipt
               </Button>
-              <Button className="rounded-none" onClick={closeInvoiceViewModal} type="button" variant="secondary">
+              <Button
+                className="rounded-none"
+                onClick={closeInvoiceViewModal}
+                type="button"
+                variant="secondary"
+              >
                 Close
               </Button>
             </div>

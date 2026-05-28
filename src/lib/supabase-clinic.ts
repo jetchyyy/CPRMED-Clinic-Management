@@ -71,6 +71,8 @@ import {
   FunctionsRelayError,
 } from "@supabase/supabase-js";
 
+import { generateInvoiceNumber } from "../features/billing/api/billing-mutations";
+
 export interface DoctorDirectoryItem {
   id: string;
   profileId: string;
@@ -483,7 +485,10 @@ function getDoctorSharePercentage(doctorId: string): number {
   return 100;
 }
 
-export function saveDoctorSharePercentage(doctorId: string, share: number): void {
+export function saveDoctorSharePercentage(
+  doctorId: string,
+  share: number,
+): void {
   try {
     const key = `odyssey-doctor-share-${doctorId}`;
     localStorage.setItem(key, String(share));
@@ -506,7 +511,10 @@ function getSettledConsultationIds(): string[] {
 
 function saveSettledConsultationIds(ids: string[]) {
   try {
-    localStorage.setItem("odyssey-settled-consultation-ids", JSON.stringify(ids));
+    localStorage.setItem(
+      "odyssey-settled-consultation-ids",
+      JSON.stringify(ids),
+    );
   } catch (e) {
     console.error(e);
   }
@@ -533,7 +541,8 @@ export function mapProfile(
     if (!isSupabaseConfigured) {
       baseProfile.consultationFee = (row as any).consultationFee ?? 0;
       baseProfile.followUpFee = (row as any).followUpFee ?? 0;
-      baseProfile.doctorSharePercentage = (row as any).doctorSharePercentage ?? 100;
+      baseProfile.doctorSharePercentage =
+        (row as any).doctorSharePercentage ?? 100;
     } else {
       baseProfile.doctorSharePercentage = getDoctorSharePercentage(row.id);
     }
@@ -594,6 +603,7 @@ function mapAppointment(row: AppointmentRow): Appointment {
     doctorId: row.doctor_id ?? "",
     specialtyId: row.specialty_id ?? "",
     serviceId: row.service_id ?? "",
+    serviceType: mapServiceType(row.service_type),
     bookingId: row.booking_id,
     scheduledAt: row.scheduled_at,
     status: mapAppointmentStatus(row.status),
@@ -690,7 +700,9 @@ function mapBooking(row: BookingRow): Booking {
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
     promoCodeId: (row as any).promo_code_id ?? null,
-    discountAmount: (row as any).discount_amount ? Number((row as any).discount_amount) : 0,
+    discountAmount: (row as any).discount_amount
+      ? Number((row as any).discount_amount)
+      : 0,
   };
 }
 
@@ -766,7 +778,7 @@ function mapInvoiceRow(row: {
     invoiceNumber: row.invoice_number,
     paymentStatus: mapInvoicePaymentStatus(row.payment_status),
     subtotal: Number(row.subtotal ?? 0),
-    discountType: (row.discount_type as any) || 'none',
+    discountType: (row.discount_type as any) || "none",
     discountAmount: row.discount_amount ? Number(row.discount_amount) : 0,
     taxAmount: row.tax_amount ? Number(row.tax_amount) : 0,
     total: Number(row.total ?? 0),
@@ -887,7 +899,8 @@ function mapPosSaleItemRow(row: {
 
 function mapConsultation(row: ConsultationRow) {
   const settledIds = getSettledConsultationIds();
-  const isPaid = (row as any).payout_status === "paid" || settledIds.includes(row.id);
+  const isPaid =
+    (row as any).payout_status === "paid" || settledIds.includes(row.id);
   return {
     id: row.id,
     appointmentId: row.appointment_id,
@@ -914,7 +927,7 @@ function mapConsultation(row: ConsultationRow) {
     outcome: row.outcome,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    payoutStatus: isPaid ? "paid" as const : "pending" as const,
+    payoutStatus: isPaid ? ("paid" as const) : ("pending" as const),
     payoutSettledAt: (row as any).payout_settled_at ?? null,
   };
 }
@@ -1067,7 +1080,11 @@ export async function listPatientsLiveOrDemo() {
     const database = getDatabase();
     const patientIdsWithAppointment = new Set(
       database.appointments
-        .filter((appointment) => appointment.patientId && hasConsultationAppointment(appointment.status))
+        .filter(
+          (appointment) =>
+            appointment.patientId &&
+            hasConsultationAppointment(appointment.status),
+        )
         .map((appointment) => appointment.patientId as string),
     );
     const patientIdsWithBooking = new Set(
@@ -1552,11 +1569,14 @@ export async function createInvoiceLiveOrDemo(
   const client = requireSupabase();
   const invoicePayload = {
     patient_id: invoice.patientId,
-    appointment_id: invoice.appointmentId && invoice.appointmentId !== "" ? invoice.appointmentId : null,
+    appointment_id:
+      invoice.appointmentId && invoice.appointmentId !== ""
+        ? invoice.appointmentId
+        : null,
     invoice_number: invoice.invoiceNumber,
     payment_status: invoice.paymentStatus,
     subtotal: invoice.subtotal,
-    discount_type: invoice.discountType ?? 'none',
+    discount_type: invoice.discountType ?? "none",
     discount_amount: invoice.discountAmount ?? 0,
     tax_amount: invoice.taxAmount ?? 0,
     total: invoice.total,
@@ -1627,11 +1647,14 @@ export async function updateInvoiceLiveOrDemo(
   const client = requireSupabase();
   const invoicePayload = {
     patient_id: invoice.patientId,
-    appointment_id: invoice.appointmentId && invoice.appointmentId !== "" ? invoice.appointmentId : null,
+    appointment_id:
+      invoice.appointmentId && invoice.appointmentId !== ""
+        ? invoice.appointmentId
+        : null,
     invoice_number: invoice.invoiceNumber,
     payment_status: invoice.paymentStatus,
     subtotal: invoice.subtotal,
-    discount_type: invoice.discountType ?? 'none',
+    discount_type: invoice.discountType ?? "none",
     discount_amount: invoice.discountAmount ?? 0,
     tax_amount: invoice.taxAmount ?? 0,
     total: invoice.total,
@@ -1850,7 +1873,9 @@ export async function listConsultationsByPatientIdLiveOrDemo(
   return ((data ?? []) as ConsultationRow[]).map(mapConsultation);
 }
 
-export async function listAllConsultationsLiveOrDemo(): Promise<Consultation[]> {
+export async function listAllConsultationsLiveOrDemo(): Promise<
+  Consultation[]
+> {
   if (!isSupabaseConfigured) {
     return getDatabase().consultations;
   }
@@ -1868,7 +1893,9 @@ export async function listAllConsultationsLiveOrDemo(): Promise<Consultation[]> 
   return ((data ?? []) as ConsultationRow[]).map(mapConsultation);
 }
 
-export async function settleConsultationsLiveOrDemo(consultationIds: string[]): Promise<void> {
+export async function settleConsultationsLiveOrDemo(
+  consultationIds: string[],
+): Promise<void> {
   if (!isSupabaseConfigured) {
     const { settleConsultationsInDemo } = await import("./local-db");
     settleConsultationsInDemo(consultationIds);
@@ -1877,7 +1904,9 @@ export async function settleConsultationsLiveOrDemo(consultationIds: string[]): 
 
   // Live fallback: store settled IDs in localStorage
   const existingSettled = getSettledConsultationIds();
-  const nextSettled = Array.from(new Set([...existingSettled, ...consultationIds]));
+  const nextSettled = Array.from(
+    new Set([...existingSettled, ...consultationIds]),
+  );
   saveSettledConsultationIds(nextSettled);
 }
 
@@ -1948,6 +1977,7 @@ export async function createAppointmentLiveOrDemo(
     doctor_id: input.doctorId || null,
     specialty_id: input.specialtyId || null,
     service_id: input.serviceId || null,
+    service_type: input.serviceType ?? null,
     scheduled_at: input.scheduledAt,
     status: input.status,
     source: input.source,
@@ -4125,10 +4155,11 @@ export async function markBookingPaidAndCreateInvoiceLiveOrDemo(
         appointmentId,
       });
 
+      const existingInvoices = await listInvoicesLiveOrDemo();
       const invoicePayload = {
         patient_id: booking.patient_id,
         appointment_id: appointmentId,
-        invoice_number: `INV-${Date.now()}`,
+        invoice_number: `${generateInvoiceNumber(existingInvoices)}`,
         payment_status: "paid",
         subtotal: booking.fee_amount,
         total: booking.fee_amount,
@@ -4241,7 +4272,10 @@ export async function listUsersLiveOrDemo() {
     .select("profile_id, consultation_fee, follow_up_fee")
     .in("profile_id", profileIds);
 
-  const doctorFeesMap = new Map<string, { consultationFee: number; followUpFee: number }>();
+  const doctorFeesMap = new Map<
+    string,
+    { consultationFee: number; followUpFee: number }
+  >();
   if (doctorsData) {
     doctorsData.forEach((d: any) => {
       doctorFeesMap.set(d.profile_id, {
@@ -4252,7 +4286,9 @@ export async function listUsersLiveOrDemo() {
   }
 
   return profiles.map((profile) => {
-    const mapped = mapProfile(profile, { accessRole: accessRoleMap.get(profile.id) ?? null });
+    const mapped = mapProfile(profile, {
+      accessRole: accessRoleMap.get(profile.id) ?? null,
+    });
     const fees = doctorFeesMap.get(profile.id);
     if (fees) {
       mapped.consultationFee = fees.consultationFee;
@@ -5349,13 +5385,17 @@ export async function getInventoryLogs(
 
 export async function listInventoryUsageLogsByPatientIdLiveOrDemo(
   patientId: string,
-): Promise<Array<InventoryUsageLog & { unitPrice?: number; itemIdRaw?: string }>> {
+): Promise<
+  Array<InventoryUsageLog & { unitPrice?: number; itemIdRaw?: string }>
+> {
   if (!isSupabaseConfigured) {
     const db = getDatabase();
     return db.inventoryUsageLogs
       .filter((log) => log.patientId === patientId)
       .map((log) => {
-        const item = db.inventoryItems.find((i) => i.id === log.itemId || i.name === log.itemId);
+        const item = db.inventoryItems.find(
+          (i) => i.id === log.itemId || i.name === log.itemId,
+        );
         return {
           ...log,
           unitPrice: item ? item.sellingPrice : 0,
@@ -5399,7 +5439,9 @@ export async function listInventoryUsageLogsByPatientIdLiveOrDemo(
     recordedBy: row.profiles?.full_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    unitPrice: row.inventory_items?.selling_price ? Number(row.inventory_items.selling_price) : 0,
+    unitPrice: row.inventory_items?.selling_price
+      ? Number(row.inventory_items.selling_price)
+      : 0,
   }));
 }
 
@@ -5668,7 +5710,7 @@ export async function updatePromoCode(
     applicableServiceId?: string | null;
     active: boolean;
     expiresAt?: string | null;
-  }
+  },
 ): Promise<PromoCode> {
   const client = requireSupabase();
   const { data, error } = await (client as any)
@@ -5726,7 +5768,7 @@ export async function deletePromoCode(id: string): Promise<void> {
 
 export async function validatePromoCode(
   code: string,
-  serviceId: string
+  serviceId: string,
 ): Promise<PromoCode> {
   const client = requireSupabase();
   const { data, error } = await (client as any)
@@ -5754,7 +5796,9 @@ export async function validatePromoCode(
   }
 
   if (row.applicable_service_id && row.applicable_service_id !== serviceId) {
-    throw new Error("This promo code is not applicable to the selected service.");
+    throw new Error(
+      "This promo code is not applicable to the selected service.",
+    );
   }
 
   return {
@@ -5832,14 +5876,12 @@ export async function recordInventoryUsageLiveOrDemo(
     throw updateError;
   }
 
-  const { error: txError } = await client
-    .from("stock_transactions")
-    .insert({
-      item_id: input.itemId,
-      type: "stock_out",
-      quantity: input.quantity,
-      remarks: `Used for patient ${input.patientId}. ${input.notes}`.trim(),
-    } as any);
+  const { error: txError } = await client.from("stock_transactions").insert({
+    item_id: input.itemId,
+    type: "stock_out",
+    quantity: input.quantity,
+    remarks: `Used for patient ${input.patientId}. ${input.notes}`.trim(),
+  } as any);
 
   if (txError) {
     console.error("Failed to insert stock transaction:", txError);

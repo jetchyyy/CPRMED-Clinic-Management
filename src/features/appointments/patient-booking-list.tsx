@@ -1,9 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CalendarCheck2,
   Search,
@@ -638,10 +633,6 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main page component
-// ---------------------------------------------------------------------------
-
 export function PatientBookingPageList() {
   const { data: bookings = [], isLoading, error } = usePatientBookings();
   const deleteMutation = useDeleteBooking();
@@ -681,7 +672,8 @@ export function PatientBookingPageList() {
 
   const bookingSummary = useMemo(
     () => ({
-      pending: bookings.filter((booking) => booking.status === "pending").length,
+      pending: bookings.filter((booking) => booking.status === "pending")
+        .length,
       confirmed: bookings.filter((booking) => booking.status === "confirmed")
         .length,
       rescheduled: bookings.filter(
@@ -999,17 +991,18 @@ function BookingTableRow({
       {/* Actions */}
       <td className="px-4 py-3 align-top">
         <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
-          {booking.paymentStatus === "paid" && booking.status !== "completed" && (
-            <button
-              type="button"
-              onClick={onRecordVitals}
-              title="Record vitals for this patient"
-              className="inline-flex h-7 items-center gap-1.5 border border-blue-300 bg-blue-600 px-2.5 text-[10px] font-extrabold uppercase tracking-widest text-white transition-colors hover:bg-blue-700"
-            >
-              <Activity className="size-3" />
-              Vitals
-            </button>
-          )}
+          {booking.paymentStatus === "paid" &&
+            booking.status !== "completed" && (
+              <button
+                type="button"
+                onClick={onRecordVitals}
+                title="Record vitals for this patient"
+                className="inline-flex h-7 items-center gap-1.5 border border-blue-300 bg-blue-600 px-2.5 text-[10px] font-extrabold uppercase tracking-widest text-white transition-colors hover:bg-blue-700"
+              >
+                <Activity className="size-3" />
+                Vitals
+              </button>
+            )}
           <button
             type="button"
             onClick={onEdit}

@@ -25,6 +25,7 @@ export interface FrontDeskWorkflowRow {
   patientIntakeSource: Patient["intakeSource"];
   appointmentSource: Appointment["source"];
   isWalkInPatient: boolean;
+  isPriority: boolean;
   appointmentId: string;
   bookingId: string | null;
   scheduledAt: string;
@@ -95,16 +96,18 @@ function hasRecordedVitals(patient: Patient | undefined) {
   if (!patient) return false;
   return Boolean(
     patient.temperature ||
-      patient.bloodPressure ||
-      patient.heartRate ||
-      patient.o2Sat ||
-      patient.respiratoryRate ||
-      patient.weight ||
-      patient.height,
+    patient.bloodPressure ||
+    patient.heartRate ||
+    patient.o2Sat ||
+    patient.respiratoryRate ||
+    patient.weight ||
+    patient.height,
   );
 }
 
-function toPaymentState(status: PaymentStatus | undefined): WorkflowPaymentState {
+function toPaymentState(
+  status: PaymentStatus | undefined,
+): WorkflowPaymentState {
   if (!status) return "no_invoice";
   return status === "paid" ? "paid" : "payment_needed";
 }
@@ -115,7 +118,9 @@ function findLatestInvoice(
 ): Invoice | undefined {
   const appointmentInvoice = invoices
     .filter((invoice) => invoice.appointmentId === appointment.id)
-    .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    .toSorted((left, right) =>
+      right.createdAt.localeCompare(left.createdAt),
+    )[0];
 
   if (appointmentInvoice) {
     return appointmentInvoice;
@@ -123,7 +128,9 @@ function findLatestInvoice(
 
   return invoices
     .filter((invoice) => invoice.patientId === appointment.patientId)
-    .toSorted((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+    .toSorted((left, right) =>
+      right.createdAt.localeCompare(left.createdAt),
+    )[0];
 }
 
 function findLinkedBooking(appointment: Appointment, bookings: Booking[]) {
@@ -156,7 +163,11 @@ function getPaymentStateForAppointment(
   }
 
   if (booking?.paymentStatus === "paid") {
-    return { invoice, paymentState: "paid" as const, receiptCode: booking.receiptCode };
+    return {
+      invoice,
+      paymentState: "paid" as const,
+      receiptCode: booking.receiptCode,
+    };
   }
 
   if (booking?.paymentStatus === "pending_cashier") {
@@ -196,23 +207,32 @@ function getDoctorBlockingReason(
 }
 
 export function buildFrontDeskWorkflowRows(input: FrontDeskWorkflowInput) {
-  const patientMap = new Map(input.patients.map((patient) => [patient.id, patient]));
+  const patientMap = new Map(
+    input.patients.map((patient) => [patient.id, patient]),
+  );
 
   return input.appointments
-    .filter((appointment) => isTodayAppointment(appointment, input.todayDateKey) && appointment.patientId)
+    .filter(
+      (appointment) =>
+        isTodayAppointment(appointment, input.todayDateKey) &&
+        appointment.patientId,
+    )
     .filter(
       (appointment) =>
         appointment.status !== "cancelled" && appointment.status !== "no_show",
     )
-    .toSorted((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
+    .toSorted((left, right) =>
+      left.scheduledAt.localeCompare(right.scheduledAt),
+    )
     .map<FrontDeskWorkflowRow>((appointment) => {
       const patient = patientMap.get(appointment.patientId!);
       const booking = findLinkedBooking(appointment, input.bookings);
-      const { invoice, paymentState, receiptCode } = getPaymentStateForAppointment(
-        appointment,
-        input.invoices,
-        input.bookings,
-      );
+      const { invoice, paymentState, receiptCode } =
+        getPaymentStateForAppointment(
+          appointment,
+          input.invoices,
+          input.bookings,
+        );
       const missingVitals = !hasRecordedVitals(patient);
 
       return {
@@ -224,6 +244,7 @@ export function buildFrontDeskWorkflowRows(input: FrontDeskWorkflowInput) {
         invoiceId: invoice?.id ?? null,
         invoiceNumber: invoice?.invoiceNumber ?? null,
         isWalkInPatient: patient?.intakeSource === "staff_walk_in",
+        isPriority: Boolean(appointment.isPriority),
         missingVitals,
         patientId: appointment.patientId!,
         patientIntakeSource: patient?.intakeSource ?? "online_registration",
@@ -242,10 +263,16 @@ export function buildFrontDeskWorkflowRows(input: FrontDeskWorkflowInput) {
 }
 
 export function buildDoctorWorkflowRows(input: DoctorWorkflowInput) {
-  const patientMap = new Map(input.patients.map((patient) => [patient.id, patient]));
+  const patientMap = new Map(
+    input.patients.map((patient) => [patient.id, patient]),
+  );
 
   return input.appointments
-    .filter((appointment) => isTodayAppointment(appointment, input.todayDateKey) && appointment.patientId)
+    .filter(
+      (appointment) =>
+        isTodayAppointment(appointment, input.todayDateKey) &&
+        appointment.patientId,
+    )
     .filter((appointment) =>
       input.doctorId ? appointment.doctorId === input.doctorId : true,
     )
@@ -255,7 +282,9 @@ export function buildDoctorWorkflowRows(input: DoctorWorkflowInput) {
         appointment.status !== "no_show" &&
         appointment.status !== "completed",
     )
-    .toSorted((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
+    .toSorted((left, right) =>
+      left.scheduledAt.localeCompare(right.scheduledAt),
+    )
     .map<DoctorWorkflowRow>((appointment) => {
       const patient = patientMap.get(appointment.patientId!);
       const { paymentState } = getPaymentStateForAppointment(
@@ -270,7 +299,8 @@ export function buildDoctorWorkflowRows(input: DoctorWorkflowInput) {
       );
       const canStartConsultation =
         !blockingReason &&
-        (appointment.status === "confirmed" || appointment.status === "in_progress");
+        (appointment.status === "confirmed" ||
+          appointment.status === "in_progress");
 
       return {
         id: appointment.id,

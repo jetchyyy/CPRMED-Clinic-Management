@@ -10,10 +10,14 @@ import {
 } from "../../teleconsult/teleconsult-data";
 import type { Appointment } from "../../../types/domain";
 
-export function useAppointments() {
+type AutoRefreshOptions = { refetchIntervalMs?: number };
+
+export function useAppointments(options?: AutoRefreshOptions) {
   return useQuery({
     queryKey: queryKeys.appointments,
     queryFn: async () => listAppointmentsLiveOrDemo(),
+    refetchInterval: options?.refetchIntervalMs ?? false,
+    refetchIntervalInBackground: Boolean(options?.refetchIntervalMs),
   });
 }
 
