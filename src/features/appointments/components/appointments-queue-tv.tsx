@@ -12,6 +12,8 @@ interface QueueItem {
   display_number: string;
   completed_at: string | null;
   scheduled_at: string;
+  service_type: string | null;
+  is_priority: boolean;
 }
 
 const defaultClinicSettings = { clinicName: "CPR Med Clinic" };
@@ -57,6 +59,45 @@ const applyVisualQueueReset = (items: QueueItem[]): QueueItem[] => {
       display_number: buildResetDisplayNumber(item.queue_number, nextNumber),
     };
   });
+};
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  medical_services: "Medical Services",
+  follow_up: "Follow Up",
+  consultation: "General Consultation",
+};
+
+const normalizeServiceType = (serviceType?: string | null) =>
+  serviceType && SERVICE_TYPE_LABELS[serviceType]
+    ? serviceType
+    : "consultation";
+
+const getServiceLabel = (serviceType?: string | null) =>
+  SERVICE_TYPE_LABELS[normalizeServiceType(serviceType)] ??
+  "General Consultation";
+
+const getQueuePriorityRank = (item: QueueItem) => {
+  if (item.is_priority) return 0;
+  const normalized = normalizeServiceType(item.service_type);
+  if (normalized === "medical_services") return 1;
+  if (normalized === "follow_up") return 2;
+  if (normalized === "consultation") return 3;
+  return 4;
+};
+
+const sortQueuesByHierarchy = (items: QueueItem[]) =>
+  [...items].sort((a, b) => {
+    const rankDiff = getQueuePriorityRank(a) - getQueuePriorityRank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return (
+      new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+    );
+  });
+
+const getNextQueueByHierarchy = (items: QueueItem[]): QueueItem | null => {
+  const pending = items.filter((item) => item.completed_at === null);
+  if (!pending.length) return null;
+  return sortQueuesByHierarchy(pending)[0] ?? null;
 };
 
 function SoundWave({ active }: { active: boolean }) {
@@ -125,7 +166,9 @@ export function AppointmentsQueueTv() {
 
     const { data } = await supabase
       .from("appointments")
-      .select("id, queue_number, completed_at, scheduled_at")
+      .select(
+        "id, queue_number, completed_at, scheduled_at, service_type, is_priority",
+      )
       .not("queue_number", "is", null)
       .order("scheduled_at", { ascending: true });
 
@@ -136,18 +179,26 @@ export function AppointmentsQueueTv() {
         display_number: apt.queue_number || "",
         completed_at: apt.completed_at,
         scheduled_at: apt.scheduled_at || new Date().toISOString(),
+        service_type: apt.service_type ?? "consultation",
+        is_priority: Boolean(apt.is_priority),
       }));
       const items = applyVisualQueueReset(rawItems);
       setQueueItems(items);
 
-      const next = items.find((i) => i.completed_at === null) ?? null;
+      const next = getNextQueueByHierarchy(items);
       setCurrentQueue((prev) => {
+        const prevStillPending = prev
+          ? items.find(
+              (item) => item.id === prev.id && item.completed_at === null,
+            )
+          : null;
+        const nextQueue = prevStillPending ?? next;
         // Track the previous queue whenever it changes
-        if (prev && next && prev.id !== next.id) {
+        if (prev && nextQueue && prev.id !== nextQueue.id) {
           setPreviousQueue(prev);
         }
         prevCurrentRef.current = prev;
-        return next;
+        return nextQueue;
       });
     }
   }, []);
@@ -211,8 +262,11 @@ export function AppointmentsQueueTv() {
     return () => clearInterval(interval);
   }, []);
 
-  const upcomingQueues = queueItems
-    .filter((q) => q.completed_at === null && q.id !== currentQueue?.id)
+  const orderedQueues = sortQueuesByHierarchy(queueItems).filter(
+    (q) => q.completed_at === null,
+  );
+  const upcomingQueues = orderedQueues
+    .filter((q) => q.id !== currentQueue?.id)
     .slice(0, 5);
 
   const completedCount = queueItems.filter(
@@ -456,6 +510,17 @@ export function AppointmentsQueueTv() {
                   </span>
                 </div>
 
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  {currentQueue.is_priority && (
+                    <span className="rounded-full bg-rose-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-rose-700 ring-1 ring-rose-200">
+                      Priority
+                    </span>
+                  )}
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 ring-1 ring-slate-200">
+                    {getServiceLabel(currentQueue.service_type)}
+                  </span>
+                </div>
+
                 {/* Announcement bar */}
                 <div
                   className="mt-10 flex items-center gap-4 rounded-2xl px-8 py-4"
@@ -569,17 +634,27 @@ export function AppointmentsQueueTv() {
                       >
                         {q.display_number}
                       </span>
-                      {i === 0 && (
-                        <span
-                          className="ml-auto rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest"
-                          style={{
-                            background: "rgba(125,212,83,0.15)",
-                            color: "var(--color-primary)",
-                          }}
-                        >
-                          Next
+                      <div className="ml-auto flex items-center gap-2">
+                        {q.is_priority && (
+                          <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-rose-700 ring-1 ring-rose-200">
+                            Priority
+                          </span>
+                        )}
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-600 ring-1 ring-slate-200">
+                          {getServiceLabel(q.service_type)}
                         </span>
-                      )}
+                        {i === 0 && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest"
+                            style={{
+                              background: "rgba(125,212,83,0.15)",
+                              color: "var(--color-primary)",
+                            }}
+                          >
+                            Next
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

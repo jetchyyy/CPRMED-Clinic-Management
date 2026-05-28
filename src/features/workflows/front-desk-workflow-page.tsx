@@ -7,6 +7,7 @@ import {
   ClipboardList,
   CreditCard,
   Eye,
+  Flag,
   PlayCircle,
   ReceiptText,
   Search,
@@ -22,7 +23,10 @@ import { FormField } from "../../components/forms/form-field";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
-import { useAppointments, useUpdateAppointment } from "../appointments/hooks/use-appointments";
+import {
+  useAppointments,
+  useUpdateAppointment,
+} from "../appointments/hooks/use-appointments";
 import { usePatientBookings } from "../appointments/hooks/use-patients-booking";
 import { useMarkBookingPaid } from "../booking/hooks/use-bookings";
 import { useInvoices } from "../billing/api/billing-mutations";
@@ -51,7 +55,9 @@ type FrontDeskQueueFilter =
   | "walk_in"
   | "overdue";
 
-function mapBookingRows(rows: ReturnType<typeof usePatientBookings>["data"]): Booking[] {
+function mapBookingRows(
+  rows: ReturnType<typeof usePatientBookings>["data"],
+): Booking[] {
   return (rows ?? []).map((row) => ({
     id: row.id,
     patientId: row.patientId,
@@ -91,7 +97,10 @@ function labelFromValue(value: string) {
   return value.replaceAll("_", " ");
 }
 
-function buildAppointmentPayload(appointment: Appointment, status: Appointment["status"]) {
+function buildAppointmentPayload(
+  appointment: Appointment,
+  status: Appointment["status"],
+) {
   return {
     patientId: appointment.patientId,
     doctorId: appointment.doctorId,
@@ -103,6 +112,7 @@ function buildAppointmentPayload(appointment: Appointment, status: Appointment["
     visitType: appointment.visitType,
     reason: appointment.reason,
     notes: appointment.notes,
+    isPriority: appointment.isPriority ?? false,
     teleconsultationPlatform: appointment.teleconsultationPlatform ?? undefined,
     teleconsultationUrl: appointment.teleconsultationUrl ?? undefined,
     teleconsultationAccessInstructions:
@@ -195,7 +205,9 @@ function VitalsModal({
   }
 
   const handleSubmit = async () => {
-    const hasAnyVitals = Object.values(values).some((entry) => entry.trim().length > 0);
+    const hasAnyVitals = Object.values(values).some(
+      (entry) => entry.trim().length > 0,
+    );
     if (!hasAnyVitals) {
       setError("Record at least one vital sign before saving.");
       return;
@@ -221,7 +233,9 @@ function VitalsModal({
             <p className="text-[10px] font-extrabold uppercase tracking-widest text-orange-700">
               Front Desk Action
             </p>
-            <h2 className="mt-1 text-base font-extrabold text-slate-950">Record Vitals</h2>
+            <h2 className="mt-1 text-base font-extrabold text-slate-950">
+              Record Vitals
+            </h2>
             <p className="mt-1 text-sm text-slate-500">{patientName}</p>
           </div>
           <button
@@ -238,7 +252,10 @@ function VitalsModal({
           <FormField label="Temperature (°C)">
             <Input
               onChange={(event) =>
-                setValues((prev) => ({ ...prev, temperature: event.target.value }))
+                setValues((prev) => ({
+                  ...prev,
+                  temperature: event.target.value,
+                }))
               }
               placeholder="e.g., 37.2"
               value={values.temperature}
@@ -247,7 +264,10 @@ function VitalsModal({
           <FormField label="Blood Pressure (mmHg)">
             <Input
               onChange={(event) =>
-                setValues((prev) => ({ ...prev, bloodPressure: event.target.value }))
+                setValues((prev) => ({
+                  ...prev,
+                  bloodPressure: event.target.value,
+                }))
               }
               placeholder="e.g., 120/80"
               value={values.bloodPressure}
@@ -256,7 +276,10 @@ function VitalsModal({
           <FormField label="Heart Rate (bpm)">
             <Input
               onChange={(event) =>
-                setValues((prev) => ({ ...prev, heartRate: event.target.value }))
+                setValues((prev) => ({
+                  ...prev,
+                  heartRate: event.target.value,
+                }))
               }
               placeholder="e.g., 78"
               value={values.heartRate}
@@ -264,7 +287,9 @@ function VitalsModal({
           </FormField>
           <FormField label="O2 Saturation (%)">
             <Input
-              onChange={(event) => setValues((prev) => ({ ...prev, o2Sat: event.target.value }))}
+              onChange={(event) =>
+                setValues((prev) => ({ ...prev, o2Sat: event.target.value }))
+              }
               placeholder="e.g., 98"
               value={values.o2Sat}
             />
@@ -272,7 +297,10 @@ function VitalsModal({
           <FormField label="Respiratory Rate (breaths/min)">
             <Input
               onChange={(event) =>
-                setValues((prev) => ({ ...prev, respiratoryRate: event.target.value }))
+                setValues((prev) => ({
+                  ...prev,
+                  respiratoryRate: event.target.value,
+                }))
               }
               placeholder="e.g., 16"
               value={values.respiratoryRate}
@@ -280,14 +308,18 @@ function VitalsModal({
           </FormField>
           <FormField label="Weight (kg)">
             <Input
-              onChange={(event) => setValues((prev) => ({ ...prev, weight: event.target.value }))}
+              onChange={(event) =>
+                setValues((prev) => ({ ...prev, weight: event.target.value }))
+              }
               placeholder="e.g., 65"
               value={values.weight}
             />
           </FormField>
           <FormField label="Height (cm)">
             <Input
-              onChange={(event) => setValues((prev) => ({ ...prev, height: event.target.value }))}
+              onChange={(event) =>
+                setValues((prev) => ({ ...prev, height: event.target.value }))
+              }
               placeholder="e.g., 172"
               value={values.height}
             />
@@ -295,14 +327,20 @@ function VitalsModal({
         </div>
 
         {error ? (
-          <p className="px-5 pb-2 text-sm font-semibold text-rose-700">{error}</p>
+          <p className="px-5 pb-2 text-sm font-semibold text-rose-700">
+            {error}
+          </p>
         ) : null}
 
         <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
           <Button onClick={onClose} type="button" variant="secondary">
             Cancel
           </Button>
-          <Button disabled={isSaving} onClick={() => void handleSubmit()} type="button">
+          <Button
+            disabled={isSaving}
+            onClick={() => void handleSubmit()}
+            type="button"
+          >
             <Stethoscope className="mr-2 size-4" />
             Save Vitals
           </Button>
@@ -315,7 +353,9 @@ function VitalsModal({
 export function FrontDeskWorkflowPage() {
   const [walkInWizardOpen, setWalkInWizardOpen] = useState(false);
   const [bookingDrawerOpen, setBookingDrawerOpen] = useState(false);
-  const [selectedPatientRowId, setSelectedPatientRowId] = useState<string | null>(null);
+  const [selectedPatientRowId, setSelectedPatientRowId] = useState<
+    string | null
+  >(null);
   const [vitalsRowId, setVitalsRowId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [activeFilter, setActiveFilter] = useState<FrontDeskQueueFilter>("all");
@@ -387,8 +427,9 @@ export function FrontDeskWorkflowPage() {
   }, [activeFilter, searchedRows]);
   const summary = useMemo(
     () => ({
-      paymentNeeded: rows.filter((row) => row.workflowState === "payment_needed")
-        .length,
+      paymentNeeded: rows.filter(
+        (row) => row.workflowState === "payment_needed",
+      ).length,
       needsVitals: rows.filter((row) => row.workflowState === "needs_vitals")
         .length,
       ready: rows.filter((row) => row.workflowState === "ready_for_doctor")
@@ -402,10 +443,17 @@ export function FrontDeskWorkflowPage() {
   const filterCounts = useMemo(
     () => ({
       all: rows.length,
-      payment_needed: rows.filter((row) => row.workflowState === "payment_needed").length,
-      needs_vitals: rows.filter((row) => row.workflowState === "needs_vitals").length,
-      ready_for_doctor: rows.filter((row) => row.workflowState === "ready_for_doctor").length,
-      in_consultation: rows.filter((row) => row.workflowState === "in_consultation").length,
+      payment_needed: rows.filter(
+        (row) => row.workflowState === "payment_needed",
+      ).length,
+      needs_vitals: rows.filter((row) => row.workflowState === "needs_vitals")
+        .length,
+      ready_for_doctor: rows.filter(
+        (row) => row.workflowState === "ready_for_doctor",
+      ).length,
+      in_consultation: rows.filter(
+        (row) => row.workflowState === "in_consultation",
+      ).length,
       walk_in: rows.filter((row) => row.isWalkInPatient).length,
       overdue: rows.filter((row) => isFrontDeskRowOverdue(row)).length,
     }),
@@ -418,14 +466,18 @@ export function FrontDeskWorkflowPage() {
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStart = (safeCurrentPage - 1) * FRONT_DESK_WORKFLOW_PAGE_SIZE;
   const paginatedRows = useMemo(
-    () => filteredRows.slice(pageStart, pageStart + FRONT_DESK_WORKFLOW_PAGE_SIZE),
+    () =>
+      filteredRows.slice(pageStart, pageStart + FRONT_DESK_WORKFLOW_PAGE_SIZE),
     [filteredRows, pageStart],
   );
   const showingStart = filteredRows.length === 0 ? 0 : pageStart + 1;
   const showingEnd =
     filteredRows.length === 0
       ? 0
-      : Math.min(pageStart + FRONT_DESK_WORKFLOW_PAGE_SIZE, filteredRows.length);
+      : Math.min(
+          pageStart + FRONT_DESK_WORKFLOW_PAGE_SIZE,
+          filteredRows.length,
+        );
   const selectedPatientRow = useMemo(
     () => rows.find((entry) => entry.id === selectedPatientRowId) ?? null,
     [rows, selectedPatientRowId],
@@ -475,6 +527,24 @@ export function FrontDeskWorkflowPage() {
     toast.success(`${row.patientName} is now marked in consultation.`);
   };
 
+  const handleTogglePriority = async (row: FrontDeskWorkflowRow) => {
+    const appointment = appointmentMap.get(row.appointmentId);
+    if (!appointment) {
+      toast.error("Appointment record was not found.");
+      return;
+    }
+
+    const nextPriority = !appointment.isPriority;
+    await updateAppointment.mutateAsync({
+      appointmentId: appointment.id,
+      payload: {
+        ...buildAppointmentPayload(appointment, appointment.status),
+        isPriority: nextPriority,
+      },
+    });
+    toast.success(nextPriority ? "Marked as priority." : "Priority removed.");
+  };
+
   const openPatientDetails = (row: FrontDeskWorkflowRow) => {
     setSelectedPatientRowId(row.id);
   };
@@ -503,9 +573,15 @@ export function FrontDeskWorkflowPage() {
       return;
     }
 
-    const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...basePayload } =
-      vitalsPatient;
-    const hasAnyVitals = Object.values(values).some((entry) => entry.trim().length > 0);
+    const {
+      id: _id,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      ...basePayload
+    } = vitalsPatient;
+    const hasAnyVitals = Object.values(values).some(
+      (entry) => entry.trim().length > 0,
+    );
 
     await updatePatient.mutateAsync({
       patientId: vitalsPatient.id,
@@ -520,7 +596,7 @@ export function FrontDeskWorkflowPage() {
         height: values.height.trim() || undefined,
         vitalsRecordedAt: hasAnyVitals
           ? new Date().toISOString()
-          : vitalsPatient.vitalsRecordedAt ?? null,
+          : (vitalsPatient.vitalsRecordedAt ?? null),
       },
     });
 
@@ -583,7 +659,8 @@ export function FrontDeskWorkflowPage() {
                 Front Desk Workflow
               </h1>
               <p className="mt-1 text-sm text-slate-500">
-                Intake, payment clearance, vitals check, and doctor handoff in one queue.
+                Intake, payment clearance, vitals check, and doctor handoff in
+                one queue.
               </p>
             </div>
           </div>
@@ -599,7 +676,9 @@ export function FrontDeskWorkflowPage() {
                   }}
                   onChange={(event) => {
                     setPatientQuery(event.target.value);
-                    setPatientDropdownOpen(event.target.value.trim().length > 0);
+                    setPatientDropdownOpen(
+                      event.target.value.trim().length > 0,
+                    );
                   }}
                   placeholder="Lookup any patient…"
                   value={patientQuery}
@@ -792,7 +871,8 @@ export function FrontDeskWorkflowPage() {
               Today&apos;s Queue
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-950">
-              {filteredRows.length} active item{filteredRows.length === 1 ? "" : "s"}
+              {filteredRows.length} active item
+              {filteredRows.length === 1 ? "" : "s"}
             </p>
           </div>
           <div className="flex w-full max-w-sm items-center gap-2 border border-slate-200 bg-slate-50 px-4 py-2.5">
@@ -812,15 +892,17 @@ export function FrontDeskWorkflowPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-6 py-3">
           <div className="flex flex-wrap gap-2">
-            {([
-              ["all", "All"],
-              ["payment_needed", "Payment Needed"],
-              ["needs_vitals", "Needs Vitals"],
-              ["ready_for_doctor", "Ready"],
-              ["in_consultation", "In Consultation"],
-              ["walk_in", "Walk-in"],
-              ["overdue", "Overdue"],
-            ] as const).map(([value, label]) => (
+            {(
+              [
+                ["all", "All"],
+                ["payment_needed", "Payment Needed"],
+                ["needs_vitals", "Needs Vitals"],
+                ["ready_for_doctor", "Ready"],
+                ["in_consultation", "In Consultation"],
+                ["walk_in", "Walk-in"],
+                ["overdue", "Overdue"],
+              ] as const
+            ).map(([value, label]) => (
               <button
                 className={`inline-flex items-center border px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wide transition ${
                   activeFilter === value
@@ -885,168 +967,214 @@ export function FrontDeskWorkflowPage() {
                 <tbody className="divide-y divide-slate-100">
                   {paginatedRows.map((row) => {
                     const overdue = isFrontDeskRowOverdue(row);
-                    const waitingMinutes = getMinutesSinceScheduled(row.scheduledAt);
+                    const waitingMinutes = getMinutesSinceScheduled(
+                      row.scheduledAt,
+                    );
 
                     return (
-                    <tr
-                      className={`align-top transition-colors ${
-                        overdue ? "bg-rose-50/40 hover:bg-rose-50" : "hover:bg-slate-50"
-                      }`}
-                      key={row.id}
-                    >
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-flex size-6 items-center justify-center rounded-full bg-slate-100 text-[11px] font-extrabold text-slate-600">
-                          {queueNumberMap.get(row.id)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {row.isWalkInPatient ? (
-                          <p className="mb-1 text-[10px] font-extrabold uppercase tracking-widest text-orange-600">
-                            Walk-in
+                      <tr
+                        className={`align-top transition-colors ${
+                          overdue
+                            ? "bg-rose-50/40 hover:bg-rose-50"
+                            : "hover:bg-slate-50"
+                        }`}
+                        key={row.id}
+                      >
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex size-6 items-center justify-center rounded-full bg-slate-100 text-[11px] font-extrabold text-slate-600">
+                            {queueNumberMap.get(row.id)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {row.isWalkInPatient || row.isPriority ? (
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                              {row.isWalkInPatient ? (
+                                <p className="text-[10px] font-extrabold uppercase tracking-widest text-orange-600">
+                                  Walk-in
+                                </p>
+                              ) : null}
+                              {row.isPriority ? (
+                                <Badge
+                                  className="rounded-none text-[10px] font-bold uppercase tracking-widest"
+                                  intent="warning"
+                                >
+                                  Priority
+                                </Badge>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          <button
+                            className="font-bold text-slate-950 hover:text-orange-600 hover:underline"
+                            onClick={() => openPatientDetails(row)}
+                            type="button"
+                          >
+                            {row.patientName}
+                          </button>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {row.reason}
                           </p>
-                        ) : null}
-                        <button
-                          className="font-bold text-slate-950 hover:text-orange-600 hover:underline"
-                          onClick={() => openPatientDetails(row)}
-                          type="button"
-                        >
-                          {row.patientName}
-                        </button>
-                        <p className="mt-1 text-xs text-slate-500">{row.reason}</p>
-                        <Link
-                          className="mt-1 inline-flex text-[11px] font-semibold text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
-                          to={`/app/patients/${row.patientId}`}
-                        >
-                          Open full chart
-                        </Link>
-                        {row.receiptCode ? (
-                          <p className="mt-1 font-mono text-[11px] font-semibold text-slate-400">
-                            {row.receiptCode}
+                          <Link
+                            className="mt-1 inline-flex text-[11px] font-semibold text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+                            to={`/app/patients/${row.patientId}`}
+                          >
+                            Open full chart
+                          </Link>
+                          {row.receiptCode ? (
+                            <p className="mt-1 font-mono text-[11px] font-semibold text-slate-400">
+                              {row.receiptCode}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          <p>{formatDateTimeLabel(row.scheduledAt)}</p>
+                          <p className="mt-1 text-xs uppercase tracking-widest text-slate-400">
+                            {labelFromValue(row.appointmentStatus)}
                           </p>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
-                        <p>{formatDateTimeLabel(row.scheduledAt)}</p>
-                        <p className="mt-1 text-xs uppercase tracking-widest text-slate-400">
-                          {labelFromValue(row.appointmentStatus)}
-                        </p>
-                        <p
-                          className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold ${
-                            overdue ? "text-rose-700" : "text-slate-500"
+                          <p
+                            className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold ${
+                              overdue ? "text-rose-700" : "text-slate-500"
+                            }`}
+                          >
+                            {overdue
+                              ? `Overdue ${waitingMinutes}m`
+                              : `Waiting ${waitingMinutes}m`}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            className="rounded-none text-[10px] font-bold uppercase tracking-widest"
+                            intent={paymentBadgeIntent(row.paymentState)}
+                          >
+                            {labelFromValue(row.paymentState)}
+                          </Badge>
+                          {row.invoiceNumber ? (
+                            <p className="mt-1 text-xs text-slate-500">
+                              {row.invoiceNumber}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            className="rounded-none text-[10px] font-bold uppercase tracking-widest"
+                            intent={workflowBadgeIntent(row.workflowState)}
+                          >
+                            {labelFromValue(row.workflowState)}
+                          </Badge>
+                          {row.missingVitals ? (
+                            <p className="mt-1 text-xs text-amber-700">
+                              Vitals needed
+                            </p>
+                          ) : null}
+                        </td>
+                        <td
+                          className={`sticky right-0 px-4 py-3 ${
+                            overdue ? "bg-rose-50/95" : "bg-white"
                           }`}
                         >
-                          {overdue
-                            ? `Overdue ${waitingMinutes}m`
-                            : `Waiting ${waitingMinutes}m`}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          className="rounded-none text-[10px] font-bold uppercase tracking-widest"
-                          intent={paymentBadgeIntent(row.paymentState)}
-                        >
-                          {labelFromValue(row.paymentState)}
-                        </Badge>
-                        {row.invoiceNumber ? (
-                          <p className="mt-1 text-xs text-slate-500">{row.invoiceNumber}</p>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          className="rounded-none text-[10px] font-bold uppercase tracking-widest"
-                          intent={workflowBadgeIntent(row.workflowState)}
-                        >
-                          {labelFromValue(row.workflowState)}
-                        </Badge>
-                        {row.missingVitals ? (
-                          <p className="mt-1 text-xs text-amber-700">Vitals needed</p>
-                        ) : null}
-                      </td>
-                      <td
-                        className={`sticky right-0 px-4 py-3 ${
-                          overdue ? "bg-rose-50/95" : "bg-white"
-                        }`}
-                      >
-                        <div className="flex min-w-max justify-end gap-1.5">
-                          {row.paymentState !== "paid" ? (
-                            row.receiptCode ? (
-                              <Button
-                                aria-label={`Mark ${row.patientName} as paid`}
-                                className="rounded-none border border-emerald-300 bg-emerald-50 p-2 text-emerald-800 hover:bg-emerald-100"
-                                disabled={markBookingPaid.isPending || !row.receiptCode}
-                                onClick={() => void handleMarkBookingPaid(row)}
-                                type="button"
-                                variant="secondary"
-                              >
-                                <CreditCard className="size-3.5" />
-                              </Button>
-                            ) : (
-                              <Link
-                                aria-label={`Create invoice for ${row.patientName}`}
-                                className="inline-flex items-center border border-emerald-200 bg-emerald-50 p-2 text-emerald-800 transition hover:bg-emerald-100"
-                                to={`/app/billing?action=create&patientId=${row.patientId}&appointmentId=${row.appointmentId}`}
-                              >
-                                <ReceiptText className="size-3.5" />
-                              </Link>
-                            )
-                          ) : null}
-                          {row.workflowState === "needs_vitals" || row.missingVitals ? (
+                          <div className="flex min-w-max justify-end gap-1.5">
                             <Button
-                              aria-label={`Record vitals for ${row.patientName}`}
-                              className="rounded-none border border-amber-300 bg-amber-50 p-2 text-amber-800 hover:bg-amber-100"
-                              disabled={updatePatient.isPending}
-                              onClick={() => openVitalsModal(row)}
+                              aria-label={`Toggle priority for ${row.patientName}`}
+                              className={
+                                row.isPriority
+                                  ? "rounded-none border border-amber-600 bg-amber-600 p-2 text-white hover:bg-amber-700"
+                                  : "rounded-none border border-amber-300 bg-amber-50 p-2 text-amber-800 hover:bg-amber-100"
+                              }
+                              disabled={updateAppointment.isPending}
+                              onClick={() => void handleTogglePriority(row)}
                               type="button"
                               variant="secondary"
                             >
-                              <Stethoscope className="size-3.5" />
+                              <Flag className="size-3.5" />
                             </Button>
-                          ) : null}
-                          <Link
-                            aria-label={`Open ${row.patientName} patient page`}
-                            className="inline-flex items-center border border-slate-200 bg-white p-2 text-slate-700 transition hover:bg-slate-50"
-                            to={`/app/patients/${row.patientId}`}
-                          >
-                            <ExternalLink className="size-3.5" />
-                          </Link>
-                          <Button
-                            aria-label={`Open ${row.patientName} details modal`}
-                            className="rounded-none border border-slate-200 bg-white p-2 text-slate-700 transition hover:bg-slate-50"
-                            onClick={() => openPatientDetails(row)}
-                            type="button"
-                            variant="secondary"
-                          >
-                            <Eye className="size-3.5" />
-                          </Button>
-                          <Button
-                            aria-label={`Send ${row.patientName} to doctor`}
-                            className="rounded-none bg-orange-600 px-3 py-2 text-xs text-white hover:bg-orange-700"
-                            disabled={
-                              updateAppointment.isPending ||
-                              row.workflowState !== "ready_for_doctor"
-                            }
-                            onClick={() => void handleSendToDoctor(row)}
-                            type="button"
-                          >
-                            <PlayCircle className="mr-1 size-3.5" />
-                            Send
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  )})}
+                            {row.paymentState !== "paid" ? (
+                              row.receiptCode ? (
+                                <Button
+                                  aria-label={`Mark ${row.patientName} as paid`}
+                                  className="rounded-none border border-emerald-300 bg-emerald-50 p-2 text-emerald-800 hover:bg-emerald-100"
+                                  disabled={
+                                    markBookingPaid.isPending ||
+                                    !row.receiptCode
+                                  }
+                                  onClick={() =>
+                                    void handleMarkBookingPaid(row)
+                                  }
+                                  type="button"
+                                  variant="secondary"
+                                >
+                                  <CreditCard className="size-3.5" />
+                                </Button>
+                              ) : (
+                                <Link
+                                  aria-label={`Create invoice for ${row.patientName}`}
+                                  className="inline-flex items-center border border-emerald-200 bg-emerald-50 p-2 text-emerald-800 transition hover:bg-emerald-100"
+                                  to={`/app/billing?action=create&patientId=${row.patientId}&appointmentId=${row.appointmentId}`}
+                                >
+                                  <ReceiptText className="size-3.5" />
+                                </Link>
+                              )
+                            ) : null}
+                            {row.workflowState === "needs_vitals" ||
+                            row.missingVitals ? (
+                              <Button
+                                aria-label={`Record vitals for ${row.patientName}`}
+                                className="rounded-none border border-amber-300 bg-amber-50 p-2 text-amber-800 hover:bg-amber-100"
+                                disabled={updatePatient.isPending}
+                                onClick={() => openVitalsModal(row)}
+                                type="button"
+                                variant="secondary"
+                              >
+                                <Stethoscope className="size-3.5" />
+                              </Button>
+                            ) : null}
+                            <Link
+                              aria-label={`Open ${row.patientName} patient page`}
+                              className="inline-flex items-center border border-slate-200 bg-white p-2 text-slate-700 transition hover:bg-slate-50"
+                              to={`/app/patients/${row.patientId}`}
+                            >
+                              <ExternalLink className="size-3.5" />
+                            </Link>
+                            <Button
+                              aria-label={`Open ${row.patientName} details modal`}
+                              className="rounded-none border border-slate-200 bg-white p-2 text-slate-700 transition hover:bg-slate-50"
+                              onClick={() => openPatientDetails(row)}
+                              type="button"
+                              variant="secondary"
+                            >
+                              <Eye className="size-3.5" />
+                            </Button>
+                            <Button
+                              aria-label={`Send ${row.patientName} to doctor`}
+                              className="rounded-none bg-orange-600 px-3 py-2 text-xs text-white hover:bg-orange-700"
+                              disabled={
+                                updateAppointment.isPending ||
+                                row.workflowState !== "ready_for_doctor"
+                              }
+                              onClick={() => void handleSendToDoctor(row)}
+                              type="button"
+                            >
+                              <PlayCircle className="mr-1 size-3.5" />
+                              Send
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-6 py-3">
               <p className="text-xs font-semibold text-slate-500">
-                Showing {showingStart}-{showingEnd} of {filteredRows.length} items
+                Showing {showingStart}-{showingEnd} of {filteredRows.length}{" "}
+                items
               </p>
               <div className="flex items-center gap-2">
                 <Button
                   className="rounded-none px-3 py-1 text-xs font-bold uppercase tracking-wide"
                   disabled={safeCurrentPage <= 1}
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  onClick={() =>
+                    setCurrentPage((page) => Math.max(1, page - 1))
+                  }
                   type="button"
                   variant="secondary"
                 >
@@ -1058,7 +1186,9 @@ export function FrontDeskWorkflowPage() {
                 <Button
                   className="rounded-none px-3 py-1 text-xs font-bold uppercase tracking-wide"
                   disabled={safeCurrentPage >= totalPages}
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  onClick={() =>
+                    setCurrentPage((page) => Math.min(totalPages, page + 1))
+                  }
                   type="button"
                   variant="secondary"
                 >
@@ -1094,7 +1224,6 @@ export function FrontDeskWorkflowPage() {
         open={Boolean(vitalsRow && vitalsPatient)}
         patientName={vitalsRow?.patientName ?? ""}
       />
-
     </div>
   );
 }

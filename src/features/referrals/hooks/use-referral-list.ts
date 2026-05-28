@@ -9,6 +9,8 @@ import {
 import type { ReferralStatus } from "../../../types/domain";
 import type { Database } from "../../../types/database";
 
+type AutoRefreshOptions = { refetchIntervalMs?: number };
+
 type ReferralRow = Database["public"]["Tables"]["referrals"]["Row"];
 
 export interface ReferralListItem {
@@ -236,12 +238,14 @@ async function softDeleteReferral(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export function useReferralsList() {
+export function useReferralsList(options?: AutoRefreshOptions) {
   const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: queryKeys.referrals(null),
     queryFn: fetchAllReferrals,
+    refetchInterval: options?.refetchIntervalMs ?? false,
+    refetchIntervalInBackground: Boolean(options?.refetchIntervalMs),
   });
 
   const updateMutation = useMutation({

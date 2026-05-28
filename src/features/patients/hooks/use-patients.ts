@@ -40,10 +40,14 @@ import {
   type ConsultationSubmissionPayload,
 } from "../../consultation/services/consultation-service";
 
-export function usePatients() {
+type AutoRefreshOptions = { refetchIntervalMs?: number };
+
+export function usePatients(options?: AutoRefreshOptions) {
   return useQuery({
     queryKey: queryKeys.patients,
     queryFn: listPatientsLiveOrDemo,
+    refetchInterval: options?.refetchIntervalMs ?? false,
+    refetchIntervalInBackground: Boolean(options?.refetchIntervalMs),
   });
 }
 
@@ -88,10 +92,12 @@ export function useDeletePatient() {
   });
 }
 
-export function usePatientActionLogs() {
+export function usePatientActionLogs(options?: AutoRefreshOptions) {
   return useQuery({
     queryKey: queryKeys.patientActionLogs,
     queryFn: async () => listPatientActionLogs(),
+    refetchInterval: options?.refetchIntervalMs ?? false,
+    refetchIntervalInBackground: Boolean(options?.refetchIntervalMs),
   });
 }
 
@@ -278,7 +284,7 @@ export function usePatientLabRequestDocuments(patientId: string | null) {
 export function useCreateLabRequestDocument() {
   return useMutation({
     mutationFn: async (
-      payload: Omit<LabRequestDocument, 'id' | 'createdAt' | 'updatedAt'>,
+      payload: Omit<LabRequestDocument, "id" | "createdAt" | "updatedAt">,
     ) => createLabRequestDocumentLiveOrDemo(payload),
     onSuccess: (_result, variables) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.patients });

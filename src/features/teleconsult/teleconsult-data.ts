@@ -12,6 +12,7 @@ import type {
   Patient,
   Role,
   Service,
+  ServiceType,
   UserProfile,
 } from "../../types/domain";
 
@@ -27,6 +28,7 @@ type AppointmentRowLoose =
     teleconsultation_platform?: string | null;
     teleconsultation_url?: string | null;
     teleconsultation_access_instructions?: string | null;
+    is_priority?: boolean | null;
   };
 
 interface NormalizedAppointmentInput extends AppointmentInput {
@@ -82,6 +84,18 @@ function normalizeTimeOnlyValue(value?: string | null) {
   }).format(parsed);
 }
 
+function normalizeServiceType(
+  value: string | null | undefined,
+): ServiceType | null {
+  if (value === "consultation" || value === "follow_up") {
+    return value;
+  }
+  if (value === "medical_service") {
+    return value;
+  }
+  return null;
+}
+
 function normalizeAppointmentInput(
   input: AppointmentInput,
 ): NormalizedAppointmentInput {
@@ -119,9 +133,11 @@ function mapAppointmentRow(
     doctorId: row.doctor_id ?? "",
     specialtyId: row.specialty_id ?? "",
     serviceId: row.service_id ?? "",
+    serviceType: normalizeServiceType(row.service_type),
     scheduledAt: row.scheduled_at,
     queue_number: (row as any).queue_number ?? null,
     estimated_end: (row as any).estimated_end ?? null,
+    isPriority: row.is_priority ?? false,
     status:
       row.status === "scheduled" ||
       row.status === "confirmed" ||
@@ -160,9 +176,10 @@ function buildTeleconsultSummary(
   const roomName = appointment.teleconsultationRoomName || "";
   const platform = appointment.teleconsultationPlatform || "Jitsi Meet";
   const access = appointment.teleconsultationAccessInstructions;
-  const targetPath = platform === "Jitsi Meet"
-    ? `/app/teleconsult/${appointment.id}`
-    : `/app/teleconsult/${appointment.id}`;
+  const targetPath =
+    platform === "Jitsi Meet"
+      ? `/app/teleconsult/${appointment.id}`
+      : `/app/teleconsult/${appointment.id}`;
 
   return {
     id: appointment.id,
@@ -213,6 +230,7 @@ export async function createAppointmentLiveOrDemo(input: AppointmentInput) {
     scheduled_at: normalized.scheduledAt,
     queue_number: (normalized as any).queue_number ?? null,
     estimated_end: normalizeTimeOnlyValue((normalized as any).estimated_end),
+    is_priority: normalized.isPriority ?? false,
     status: normalized.status,
     source: normalized.source,
     visit_type: normalized.visitType,
@@ -226,6 +244,11 @@ export async function createAppointmentLiveOrDemo(input: AppointmentInput) {
       normalized.teleconsultationAccessInstructions,
     additional_doctor_ids: (normalized as any).additionalDoctorIds || [],
   };
+
+  if (normalized.serviceType != null) {
+    (payload as { service_type?: ServiceType }).service_type =
+      normalized.serviceType;
+  }
 
   const { data, error } = await client
     .from("appointments")
@@ -256,9 +279,11 @@ export async function updateAppointmentLiveOrDemo(
     doctor_id: normalized.doctorId || null,
     specialty_id: normalized.specialtyId || null,
     service_id: normalized.serviceId || null,
+    service_type: normalized.serviceType ?? null,
     scheduled_at: normalized.scheduledAt,
     queue_number: (normalized as any).queue_number ?? null,
     estimated_end: normalizeTimeOnlyValue((normalized as any).estimated_end),
+    is_priority: normalized.isPriority ?? false,
     status: normalized.status,
     source: normalized.source,
     visit_type: normalized.visitType,
@@ -437,7 +462,9 @@ export async function getTeleconsultAppointmentsForUser(input: {
     if (!doctorId) {
       return [];
     }
-    query = query.or(`doctor_id.eq.${doctorId},additional_doctor_ids.cs.{${doctorId}}`);
+    query = query.or(
+      `doctor_id.eq.${doctorId},additional_doctor_ids.cs.{${doctorId}}`,
+    );
   }
 
   const { data, error } = await query;
@@ -459,8 +486,12 @@ export async function getTeleconsultAppointmentsForUser(input: {
   ];
   const doctorIds = [
     ...new Set([
-      ...appointments.map((appointment) => appointment.doctorId).filter(Boolean),
-      ...appointments.flatMap((appointment) => appointment.additionalDoctorIds || []).filter(Boolean),
+      ...appointments
+        .map((appointment) => appointment.doctorId)
+        .filter(Boolean),
+      ...appointments
+        .flatMap((appointment) => appointment.additionalDoctorIds || [])
+        .filter(Boolean),
     ]),
   ];
   const serviceIds = [
@@ -564,7 +595,6 @@ export async function getTeleconsultAppointmentsForUser(input: {
     ),
   );
 }
-
 
 export async function getAuthorizedTeleconsultAppointmentForUser(input: {
   appointmentId: string;

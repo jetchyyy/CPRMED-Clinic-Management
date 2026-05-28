@@ -32,6 +32,8 @@ interface QueueDisplay {
   status: "waiting" | "called" | "in-service" | "completed";
   completed_at: string | null;
   scheduled_at: string;
+  service_type: string | null;
+  is_priority: boolean;
 }
 
 const STATUS_CONFIG: Record<
@@ -56,6 +58,21 @@ const STATUS_CONFIG: Record<
     className: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",
   },
 };
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  medical_services: "Medical Services",
+  follow_up: "Follow Up",
+  consultation: "General Consultation",
+};
+
+const normalizeServiceType = (serviceType?: string | null) =>
+  serviceType && SERVICE_TYPE_LABELS[serviceType]
+    ? serviceType
+    : "consultation";
+
+const getServiceLabel = (serviceType?: string | null) =>
+  SERVICE_TYPE_LABELS[normalizeServiceType(serviceType)] ??
+  "General Consultation";
 
 const VISUAL_RESET_HOUR = 22;
 
@@ -110,22 +127,42 @@ export function AppointmentsQueueDisplay() {
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
   const lastAnnouncedRef = useRef<string | null>(null);
 
-  const getNextQueueInLine = (items: QueueDisplay[]) =>
-    items.find((item) => item.completed_at === null) ?? null;
-
   const hasScheduledTimePassed = (scheduledAt: string): boolean => {
     return new Date(scheduledAt) <= new Date();
   };
 
-  const getNextQueueByScheduledTime = (
+  const pickFirstReady = (items: QueueDisplay[]): QueueDisplay | null => {
+    if (!items.length) return null;
+    const ready = items.filter((item) =>
+      hasScheduledTimePassed(item.scheduled_at),
+    );
+    return ready[0] ?? items[0] ?? null;
+  };
+
+  const getNextQueueByHierarchy = (
     items: QueueDisplay[],
   ): QueueDisplay | null => {
-    const nextByTime = items.find(
-      (item) =>
-        item.completed_at === null && hasScheduledTimePassed(item.scheduled_at),
+    const pending = items.filter((item) => item.completed_at === null);
+    if (!pending.length) return null;
+
+    const priorityItems = pending.filter((item) => item.is_priority);
+    const medicalItems = pending.filter(
+      (item) => normalizeServiceType(item.service_type) === "medical_services",
     );
-    if (nextByTime) return nextByTime;
-    return items.find((item) => item.completed_at === null) ?? null;
+    const followUpItems = pending.filter(
+      (item) => normalizeServiceType(item.service_type) === "follow_up",
+    );
+    const consultItems = pending.filter(
+      (item) => normalizeServiceType(item.service_type) === "consultation",
+    );
+
+    return (
+      pickFirstReady(priorityItems) ??
+      pickFirstReady(medicalItems) ??
+      pickFirstReady(followUpItems) ??
+      pickFirstReady(consultItems) ??
+      pickFirstReady(pending)
+    );
   };
 
   const formatQueueForSpeech = (queueNumber: string): string => {
@@ -149,7 +186,9 @@ export function AppointmentsQueueDisplay() {
 
       const { data, error: fetchError } = await supabase
         .from("appointments")
-        .select("id, queue_number, status, completed_at, scheduled_at")
+        .select(
+          "id, queue_number, status, completed_at, scheduled_at, service_type, is_priority",
+        )
         .not("queue_number", "is", null)
         .order("scheduled_at", { ascending: true });
 
@@ -161,6 +200,8 @@ export function AppointmentsQueueDisplay() {
             id: apt.id,
             queue_number: apt.queue_number || "",
             display_number: apt.queue_number || "",
+            service_type: apt.service_type ?? "consultation",
+            is_priority: Boolean(apt.is_priority),
             status: apt.completed_at
               ? "completed"
               : apt.status === "in-service"
@@ -176,7 +217,7 @@ export function AppointmentsQueueDisplay() {
         const visualResetData = applyVisualQueueReset(formattedData);
         setQueueNumbers(visualResetData);
 
-        const nextInLine = getNextQueueInLine(visualResetData);
+        const nextInLine = getNextQueueByHierarchy(visualResetData);
         if (
           nextInLine &&
           (!currentQueue || currentQueue.id !== nextInLine.id)
@@ -198,7 +239,7 @@ export function AppointmentsQueueDisplay() {
     if (!queueNumbers.length) return;
 
     const interval = setInterval(() => {
-      const nextQueue = getNextQueueByScheduledTime(queueNumbers);
+      const nextQueue = getNextQueueByHierarchy(queueNumbers);
 
       if (nextQueue && currentQueue?.id !== nextQueue.id) {
         setCurrentQueue(nextQueue);
@@ -241,7 +282,7 @@ export function AppointmentsQueueDisplay() {
                   }
                 : queue,
             );
-            const nextQueue = getNextQueueByScheduledTime(refreshedQueues);
+            const nextQueue = getNextQueueByHierarchy(refreshedQueues);
 
             if (nextQueue && nextQueue.id !== lastAnnouncedRef.current) {
               setTimeout(() => {
@@ -289,7 +330,7 @@ export function AppointmentsQueueDisplay() {
   };
 
   const handleCallNext = async () => {
-    const waitingQueue = getNextQueueByScheduledTime(queueNumbers);
+    const waitingQueue = getNextQueueByHierarchy(queueNumbers);
     if (!waitingQueue || !supabase) return;
 
     try {
@@ -315,7 +356,7 @@ export function AppointmentsQueueDisplay() {
         } as never)
         .eq("id", currentQueue.id);
 
-      const nextQueue = getNextQueueByScheduledTime(
+      const nextQueue = getNextQueueByHierarchy(
         queueNumbers.map((queue) =>
           queue.id === currentQueue.id
             ? {
@@ -509,7 +550,7 @@ export function AppointmentsQueueDisplay() {
               {currentQueue ? (
                 <div className="flex flex-col items-center px-8 py-10 text-center">
                   {/* Animated rings + queue number */}
-                  <div className="relative mb-6 flex items-center justify-center">
+                  <div className="relative mb-3 flex items-center justify-center">
                     {isSpeaking && (
                       <>
                         <span
@@ -534,6 +575,17 @@ export function AppointmentsQueueDisplay() {
                         {currentQueue.display_number}
                       </span>
                     </div>
+                  </div>
+
+                  <div className="mb-6 flex flex-wrap items-center justify-center gap-2">
+                    {currentQueue.is_priority && (
+                      <span className="rounded-full bg-rose-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-rose-700 ring-1 ring-rose-200">
+                        Priority
+                      </span>
+                    )}
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-600 ring-1 ring-slate-200">
+                      {getServiceLabel(currentQueue.service_type)}
+                    </span>
                   </div>
 
                   {/* Speaking status pill */}
@@ -662,6 +714,8 @@ export function AppointmentsQueueDisplay() {
                   <tr className={INTERNAL_THEAD_ROW}>
                     <th className={INTERNAL_TH}>#</th>
                     <th className={INTERNAL_TH}>Queue Number</th>
+                    <th className={INTERNAL_TH}>Priority</th>
+                    <th className={INTERNAL_TH}>Service</th>
                     <th className={INTERNAL_TH}>Status</th>
                     <th className={INTERNAL_TH}>Scheduled</th>
                     <th className={INTERNAL_TH}>Completed</th>
@@ -672,7 +726,7 @@ export function AppointmentsQueueDisplay() {
                   {queueNumbers.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={8}
                         className="px-6 py-12 text-center text-sm text-slate-400"
                       >
                         No queue entries found
@@ -712,6 +766,25 @@ export function AppointmentsQueueDisplay() {
                           )}
                         >
                           {queue.display_number}
+                        </td>
+                        <td className={INTERNAL_TD}>
+                          {queue.is_priority ? (
+                            <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-rose-700 ring-1 ring-rose-200">
+                              Priority
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">
+                              Standard
+                            </span>
+                          )}
+                        </td>
+                        <td
+                          className={cn(
+                            INTERNAL_TD,
+                            "text-xs font-semibold text-slate-600",
+                          )}
+                        >
+                          {getServiceLabel(queue.service_type)}
                         </td>
                         <td className={INTERNAL_TD}>
                           <span
